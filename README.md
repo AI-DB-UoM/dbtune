@@ -1,3 +1,37 @@
+# dbtune
+
+
+
+## Project Structure
+
+AIDB/
+├── dbtune_mab_service/               # Python-based MAB tuning microservice
+│   ├── bandits/                      # Multi-armed bandit algorithms (e.g., C3UCB, Thompson Sampling)
+│   ├── configs/                      # Configuration files for workloads and experiments
+│   ├── db_tools/                     # PostgreSQL wrappers and tuning utilities
+│   ├── hyp_files/                    # Hypothetical index metadata
+│   ├── logs/                         # Logging outputs
+│   ├── notebooks/                    # (Optional) Jupyter notebooks for analysis
+│   ├── resource/                     # Static resources
+│   ├── shared/                       # Shared classes/utilities across modules
+│   ├── test_inputs/                 # Query input samples for testing
+│   ├── tests/                        # Pytest test suite
+│   ├── workloads/                    # Workload SQL definitions
+│   ├── app.py                        # FastAPI app entrypoint
+│   ├── celery_worker.py              # Celery worker for async execution
+│   ├── constants.py, schemas.py      # Core data structures and constants
+│   └── requirements.txt              # Python dependencies
+│
+├── dbtune_pg_mab_extension/         # PostgreSQL C extension for MAB
+│   ├── dbtune_mab--0.0.1.sql         # SQL installation script
+│   ├── dbtune_mab.c                  # C source for custom PG function
+│   ├── dbtune_mab.control            # PG extension control file
+│   ├── Makefile, Dockerfile          # Build tools for PG extension
+│   └── logs/, hyp_files/             # Extension logs and metadata
+│
+├── hyp_files/                        # Global hypothetical index records
+├── logs/                             # Top-level logs (optional)
+├── docker-compose.yml                # Docker orchestration file
 
 
 ## Setup Instructions
