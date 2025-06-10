@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+pyyaml
+requests
+celery[redis]
+redis
+sqlglot
+psycopg2-binary

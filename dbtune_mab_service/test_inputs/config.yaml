@@ -1,0 +1,7 @@
+strategy: ucb
+alpha: 0.1
+max_trials: 50
+feature_weights:
+  age: 1.0
+  income: 0.5
+notes: "Test configuration for MAB tuning with UCB strategy"

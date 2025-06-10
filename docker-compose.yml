@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    build:
+      context: ./dbtune_pg_mab_extension
+      dockerfile: Dockerfile
+    shm_size: 2g
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: pgdb
+    ports:
+      - "5438:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mab_api:
+    build: ./dbtune_mab_service
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./dbtune_mab_service:/app         # load code
+    command: uvicorn app:app --host 0.0.0.0 --port 5050 --reload  # hot deploy
+
+  mab_worker:
+    build: ./dbtune_mab_service
+    volumes:
+      - ./dbtune_mab_service:/app
+    command: celery -A celery_worker worker --loglevel=info
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

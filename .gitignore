@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+.pytest_cache/
+
+# C extension build artifacts
+*.o
+*.so
+
+# PostgreSQL extension artifacts
+*.sql~
+*.log
+*.out
+
+# Build tools
+build/
+dist/
+*.egg-info/
+
+# VS Code settings
+.vscode/
+
+# Docker files
+*.tar
+.docker/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python environment
+.env
+.venv
+env/
+venv/
+pip-log.txt
+
+# Compiled binary and control files
+dbtune_pg_mab_extension/dbtune_mab.control
+dbtune_pg_mab_extension/dbtune_mab--*.sql
+
+# Makefile products
+*.a
+*.dSYM/
+*.dylib
+
+# Misc
+*.swp
+*.bak
+
+# Some Markdown files
+*.md
+
+# Except README.md
+!README.md 
+
+auto.conf.bak
