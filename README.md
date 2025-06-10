@@ -4,6 +4,7 @@
 
 ## Project Structure
 
+```bash
 AIDB/
 ├── dbtune_mab_service/               # Python-based MAB tuning microservice
 │   ├── bandits/                      # Multi-armed bandit algorithms (e.g., C3UCB, Thompson Sampling)
@@ -32,7 +33,7 @@ AIDB/
 ├── hyp_files/                        # Global hypothetical index records
 ├── logs/                             # Top-level logs (optional)
 ├── docker-compose.yml                # Docker orchestration file
-
+```
 
 ## Setup Instructions
 
