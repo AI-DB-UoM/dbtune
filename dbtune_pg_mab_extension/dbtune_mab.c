@@ -48,6 +48,8 @@ static size_t writefunc(void *ptr, size_t size, size_t nmemb, void *userdata) {
     return real_size;
 }
 
+
+
 static void send_query_to_mab(const char *sql_text) {
     CURL *curl = curl_easy_init();
     if (!curl) return;
@@ -61,7 +63,13 @@ static void send_query_to_mab(const char *sql_text) {
     StringInfo json = makeStringInfo();
     appendStringInfo(json, "{\"query\": \"%s\"}", sql_text);
 
-    curl_easy_setopt(curl, CURLOPT_URL, mab_service_url);
+    char full_url[512];
+    sprintf(full_url, "%squery", mab_service_url);
+
+    elog(LOG, "[DBTune MAB] Sending query to URL: %s", full_url);
+    elog(LOG, "[DBTune MAB] JSON payload: %s", json->data);
+
+    curl_easy_setopt(curl, CURLOPT_URL, full_url);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json->data);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
@@ -76,8 +84,14 @@ static void my_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
     if (queryDesc && queryDesc->sourceText) {
         elog(LOG, "[HOOK] Query: %s", queryDesc->sourceText);
-        if (dbtune_mab_tuning && mab_service_url)
-            send_query_to_mab(queryDesc->sourceText);
+        elog(LOG, "[HOOK] eflags: %d", eflags);
+        if (dbtune_mab_tuning && mab_service_url) {
+            if (pg_strcasecmp(queryDesc->sourceText, "select dbtune_mab_tune();") != 0) {
+                send_query_to_mab(queryDesc->sourceText);
+            } else {
+                elog(LOG, "[HOOK] Skipped sending MAB function call to avoid recursion.");
+            }
+        }
     }
 
     if (prev_ExecutorStart)
@@ -118,10 +132,30 @@ void _PG_init(void) {
     //                          &enable_dbtune_mab, false, PGC_SUSET, 0, NULL, NULL, NULL);
     // DefineCustomStringVariable("dbtune.mab_service_url", "MAB service URL.", NULL,
     //                            &mab_service_url, "http://mab_api:5050/mab/tune_async", PGC_SUSET, 0, NULL, NULL, NULL);
-    DefineCustomBoolVariable("dbtune_mab_tuning", "Enable MAB tuning globally", NULL,                         
-                                &dbtune_mab_tuning, false, PGC_SIGHUP, 0,NULL, NULL, NULL);
-    DefineCustomStringVariable("dbtune_mab_service_url", "MAB service URL.", NULL,
-                                &mab_service_url, "http://mab_api:5050/mab/tune_async", PGC_SIGHUP, 0, NULL, NULL, NULL);
+    // DefineCustomBoolVariable("dbtune_mab_tuning", "Enable MAB tuning globally", NULL,                         
+    //                             &dbtune_mab_tuning, false, PGC_SIGHUP, 0,NULL, NULL, NULL);
+    // DefineCustomStringVariable("dbtune_mab_service_url", "MAB service URL.", NULL,
+    //                             &mab_service_url, "http://mab_api:5050/mab/", PGC_SIGHUP, 0, NULL, NULL, NULL);
+
+    DefineCustomBoolVariable(
+        "dbtune_mab_tuning",
+        "Enable MAB tuning.",
+        NULL,
+        &dbtune_mab_tuning,
+        true,
+        PGC_SIGHUP,
+        0,
+        NULL, NULL, NULL);
+
+    DefineCustomStringVariable(
+        "dbtune_mab_service_url",
+        "The URL of the MAB tuning service.",
+        NULL,
+        &mab_service_url,
+        "http://mab_api:5050/mab/",
+        PGC_SIGHUP,
+        0,
+        NULL, NULL, NULL);
 
     prev_ExecutorStart = ExecutorStart_hook;
     ExecutorStart_hook = my_ExecutorStart;
@@ -143,39 +177,39 @@ void _PG_fini(void)
 }
 
 
-static char *send_post_and_get_id(const char *json_body) {
-    CURL *curl = curl_easy_init();
-    if (!curl) elog(ERROR, "Failed to init curl");
+// static char *send_post_and_get_id(const char *json_body) {
+//     CURL *curl = curl_easy_init();
+//     if (!curl) elog(ERROR, "Failed to init curl");
 
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
+//     struct curl_slist *headers = NULL;
+//     headers = curl_slist_append(headers, "Content-Type: application/json");
 
-    struct curl_string response;
-    response.ptr = palloc(1);
-    response.ptr[0] = '\0';
-    response.len = 0;
+//     struct curl_string response;
+//     response.ptr = palloc(1);
+//     response.ptr[0] = '\0';
+//     response.len = 0;
 
-    curl_easy_setopt(curl, CURLOPT_URL, mab_service_url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+//     curl_easy_setopt(curl, CURLOPT_URL, mab_service_url);
+//     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
+//     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+//     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+//     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
+//     CURLcode res = curl_easy_perform(curl);
+//     curl_easy_cleanup(curl);
 
-    if (res != CURLE_OK)
-        elog(ERROR, "curl_easy_perform failed: %s", curl_easy_strerror(res));
+//     if (res != CURLE_OK)
+//         elog(ERROR, "curl_easy_perform failed: %s", curl_easy_strerror(res));
 
-    char *start = strstr(response.ptr, "\"task_id\":");
-    if (!start) elog(ERROR, "Response does not contain task_id");
-    start = strchr(start, '"');
-    start = strchr(start + 1, '"');
-    char *end = strchr(start + 1, '"');
-    *end = '\0';
+//     char *start = strstr(response.ptr, "\"task_id\":");
+//     if (!start) elog(ERROR, "Response does not contain task_id");
+//     start = strchr(start, '"');
+//     start = strchr(start + 1, '"');
+//     char *end = strchr(start + 1, '"');
+//     *end = '\0';
 
-    return pstrdup(start + 1);
-}
+//     return pstrdup(start + 1);
+// }
 
 static char *poll_until_done(const char *task_id) {
     CURL *curl = curl_easy_init();
@@ -251,35 +285,89 @@ static char *poll_until_done(const char *task_id) {
 //     PG_RETURN_TEXT_P(cstring_to_text(result));
 // }
 
+// Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
+//     if (!dbtune_mab_tuning)
+//         ereport(ERROR, (errmsg("DBTune MAB is disabled. Enable with: SET dbtune.enable_mab = true;")));
+
+//     text *table;
+//     ArrayType *columns;
+//     char *table_cstr;
+//     Datum *elems;
+//     int nelems;
+//     int i;
+//     CURL *curl;
+//     struct curl_string response;
+//     CURLcode res;
+//     char *start, *end;
+
+//     table = PG_GETARG_TEXT_P(0);
+//     columns = PG_GETARG_ARRAYTYPE_P(1);
+//     table_cstr = text_to_cstring(table);
+
+//     deconstruct_array(columns, TEXTOID, -1, false, 'i', &elems, NULL, &nelems);
+
+//     StringInfo json = makeStringInfo();
+//     appendStringInfo(json, "{\"table\": \"%s\", \"columns\": [", table_cstr);
+//     for (i = 0; i < nelems; i++) {
+//         if (i > 0) appendStringInfoString(json, ", ");
+//         appendStringInfo(json, "\"%s\"", TextDatumGetCString(elems[i]));
+//     }
+//     appendStringInfoString(json, "], \"options\": {}}\n");
+
+//     elog(LOG, "[DBTune MAB] JSON payload: %s", json->data);
+
+//     curl = curl_easy_init();
+//     if (!curl)
+//         ereport(ERROR, (errmsg("[DBTune] Failed to init libcurl")));
+
+//     init_string(&response);
+
+//     struct curl_slist *headers = NULL;
+//     headers = curl_slist_append(headers, "Content-Type: application/json");
+//     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+//     elog(LOG, "[DBTune] curl target URL: %s", mab_service_url);
+//     curl_easy_setopt(curl, CURLOPT_URL, mab_service_url);
+//     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+//     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+//     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json->data);
+//     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+//     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+//     res = curl_easy_perform(curl);
+//     elog(LOG, "[DBTune] curl_easy_perform result: %d", res);
+//     if (res != CURLE_OK)
+//         ereport(ERROR, (
+//             errmsg("curl_easy_perform() failed: %s", curl_easy_strerror(res)),
+//             errdetail("Request body was: %s. Response buffer: %s", json->data, response.ptr)
+//         ));
+
+//     curl_easy_cleanup(curl);
+
+//     start = strstr(response.ptr, "\"suggestion\":");
+//     if (!start)
+//         ereport(ERROR, (errmsg("MAB service did not return a suggestion"),
+//                         errdetail("Response was: %s", response.ptr)));
+
+//     start = strchr(start + 1, '"');
+//     start = strchr(start + 1, '"');
+//     end = strchr(start + 1, '"');
+//     *end = '\0';
+
+//     PG_RETURN_TEXT_P(cstring_to_text(start + 1));
+// }
+
 Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
     if (!dbtune_mab_tuning)
-        ereport(ERROR, (errmsg("DBTune MAB is disabled. Enable with: SET dbtune.enable_mab = true;")));
+        ereport(ERROR, (errmsg("DBTune MAB is disabled. Enable with: SET dbtune_mab_tuning = true;")));
 
-    text *table;
-    ArrayType *columns;
-    char *table_cstr;
-    Datum *elems;
-    int nelems;
-    int i;
     CURL *curl;
     struct curl_string response;
     CURLcode res;
     char *start, *end;
 
-    table = PG_GETARG_TEXT_P(0);
-    columns = PG_GETARG_ARRAYTYPE_P(1);
-    table_cstr = text_to_cstring(table);
-
-    deconstruct_array(columns, TEXTOID, -1, false, 'i', &elems, NULL, &nelems);
-
     StringInfo json = makeStringInfo();
-    appendStringInfo(json, "{\"table\": \"%s\", \"columns\": [", table_cstr);
-    for (i = 0; i < nelems; i++) {
-        if (i > 0) appendStringInfoString(json, ", ");
-        appendStringInfo(json, "\"%s\"", TextDatumGetCString(elems[i]));
-    }
-    appendStringInfoString(json, "], \"options\": {}}\n");
-
+    appendStringInfoString(json, "{\"query\": \"select dbtune_mab_tune();\"}");
     elog(LOG, "[DBTune MAB] JSON payload: %s", json->data);
 
     curl = curl_easy_init();
@@ -290,10 +378,16 @@ Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
 
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    elog(LOG, "[DBTune] curl target URL: %s", mab_service_url);
-    curl_easy_setopt(curl, CURLOPT_URL, mab_service_url);
+    char full_url[512];
+    sprintf(full_url, "%stune", mab_service_url);
+
+    elog(LOG, "[DBTune MAB] Sending query to URL: %s", full_url);
+    elog(LOG, "[DBTune MAB] JSON payload: %s", json->data);
+
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_URL, full_url);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json->data);
@@ -302,13 +396,17 @@ Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
 
     res = curl_easy_perform(curl);
     elog(LOG, "[DBTune] curl_easy_perform result: %d", res);
-    if (res != CURLE_OK)
+    if (res != CURLE_OK) {
         ereport(ERROR, (
             errmsg("curl_easy_perform() failed: %s", curl_easy_strerror(res)),
             errdetail("Request body was: %s. Response buffer: %s", json->data, response.ptr)
         ));
+    } else {
+        elog(LOG, "[DBTune] Response body: %s", response.ptr);
+    }
 
     curl_easy_cleanup(curl);
+    curl_slist_free_all(headers);
 
     start = strstr(response.ptr, "\"suggestion\":");
     if (!start)
@@ -318,6 +416,9 @@ Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
     start = strchr(start + 1, '"');
     start = strchr(start + 1, '"');
     end = strchr(start + 1, '"');
+    if (!end)
+        ereport(ERROR, (errmsg("Failed to parse suggestion string")));
+
     *end = '\0';
 
     PG_RETURN_TEXT_P(cstring_to_text(start + 1));

@@ -50,6 +50,10 @@ docker compose up --build
 docker compose up
 ```
 
+### Test services
+
+
+
 ### Generate Benchmark Data
 
 > (You should add instructions here if you're using dsdgen or other scripts.)

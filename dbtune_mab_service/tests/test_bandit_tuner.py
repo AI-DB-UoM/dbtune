@@ -18,7 +18,7 @@ def test_tuner():
     #     for table, fields in props.items():
     #         print(f"  {table}: {fields}")
 
-    tuner.train_MAB()
+    # tuner.train_MAB()
     
 if __name__ == "__main__":
     test_tuner()
