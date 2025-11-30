@@ -46,6 +46,7 @@ class PgReadQueryPlan:
                 table_cardinality=0
             )
             self.non_clustered_index_usages[id(node)] = index_use
+            print(f"[INFO] {node_type} on table {table_name} using index {index_name}")
 
         elif node_type == "Seq Scan" and table_name:
             print(f"[INFO] Seq Scan on table {table_name} (no index used)")
