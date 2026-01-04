@@ -1,0 +1,54 @@
+CREATE INDEX ON public.name (name_pcode_cf, id, name, gender)
+CREATE INDEX ON public.company_name (country_code, id)
+CREATE INDEX ON public.char_name (name)
+CREATE INDEX ON public.cast_info (movie_id, person_role_id, note)
+CREATE INDEX ON public.title (title, id, kind_id)
+CREATE INDEX ON public.movie_companies (note, movie_id, company_id)
+CREATE INDEX ON public.aka_name (person_id) INCLUDE (name)
+CREATE INDEX ON public.title (id) INCLUDE (title)
+CREATE INDEX ON public.name (id, name, gender)
+CREATE INDEX ON public.title (kind_id, id) INCLUDE (title)
+CREATE INDEX ON public.movie_info (note, info, movie_id, info_type_id)
+CREATE INDEX ON public.company_name (id, name, country_code)
+CREATE INDEX ON public.cast_info (note, person_id, role_id, person_role_id, movie_id)
+CREATE INDEX ON public.movie_info (info, info_type_id, movie_id)
+CREATE INDEX ON public.aka_name (name)
+CREATE INDEX ON public.name (name, id)
+CREATE INDEX ON public.keyword (keyword, id)
+CREATE INDEX ON public.movie_info_idx (info, info_type_id, movie_id)
+CREATE INDEX ON public.name USING btree (name_pcode_cf, id, name, gender);
+CREATE INDEX ON public.company_name USING btree (country_code, id);
+CREATE INDEX ON public.char_name USING btree (name);
+CREATE INDEX ON public.cast_info USING btree (movie_id, person_role_id, note);
+CREATE INDEX ON public.title USING btree (title, id, kind_id);
+CREATE INDEX ON public.movie_companies USING btree (note, movie_id, company_id);
+CREATE INDEX ON public.aka_name USING btree (person_id) INCLUDE (name);
+CREATE INDEX ON public.title USING btree (id) INCLUDE (title);
+CREATE INDEX ON public.name USING btree (id, name, gender);
+CREATE INDEX ON public.title USING btree (kind_id, id) INCLUDE (title);
+CREATE INDEX ON public.movie_info USING btree (note, info, movie_id, info_type_id);
+CREATE INDEX ON public.company_name USING btree (id, name, country_code);
+CREATE INDEX ON public.cast_info USING btree (note, person_id, role_id, person_role_id, movie_id);
+CREATE INDEX ON public.movie_info USING btree (info, info_type_id, movie_id);
+CREATE INDEX ON public.aka_name USING btree (name);
+CREATE INDEX ON public.name USING btree (name, id);
+CREATE INDEX ON public.keyword USING btree (keyword, id);
+CREATE INDEX ON public.movie_info_idx USING btree (info, info_type_id, movie_id);
+-- hypopg_reset() called for hypothetical index ix_name_name_pcode_cf_id_name_gender on public.name
+-- hypopg_reset() called for hypothetical index ix_company_name_country_code_id on public.company_name
+-- hypopg_reset() called for hypothetical index ix_char_name_name on public.char_name
+-- hypopg_reset() called for hypothetical index ix_cast_info_movie_id_person_role_id_note on public.cast_info
+-- hypopg_reset() called for hypothetical index ix_title_title_id_kind_id on public.title
+-- hypopg_reset() called for hypothetical index ix_movie_companies_note_movie_id_company_id on public.movie_companies
+-- hypopg_reset() called for hypothetical index ixn_aka_name_person_id_name on public.aka_name
+-- hypopg_reset() called for hypothetical index ixn_title_id_titl on public.title
+-- hypopg_reset() called for hypothetical index ix_name_id_name_gender on public.name
+-- hypopg_reset() called for hypothetical index ixn_title_kind_id_id_titl on public.title
+-- hypopg_reset() called for hypothetical index ix_movie_info_note_info_movie_id_info_type_id on public.movie_info
+-- hypopg_reset() called for hypothetical index ix_company_name_id_name_country_code on public.company_name
+-- hypopg_reset() called for hypothetical index ix_cast_info_note_person_id_role_id_person_role_id_movie_id on public.cast_info
+-- hypopg_reset() called for hypothetical index ix_movie_info_info_info_type_id_movie_id on public.movie_info
+-- hypopg_reset() called for hypothetical index ix_aka_name_name on public.aka_name
+-- hypopg_reset() called for hypothetical index ix_name_name_id on public.name
+-- hypopg_reset() called for hypothetical index ix_keyword_keyword_id on public.keyword
+-- hypopg_reset() called for hypothetical index ix_movie_info_idx_info_info_type_id_movie_id on public.movie_info_idx

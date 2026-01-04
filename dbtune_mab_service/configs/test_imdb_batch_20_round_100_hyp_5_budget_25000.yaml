@@ -1,0 +1,66 @@
+# DBTune Configuration File
+# This file contains all configurable parameters for the bandit tuning system
+
+# Database Configuration
+database:
+  dbname: "imdbload"
+  user: "guanlil1"
+  host: "/var/run/postgresql"
+  port: 5432
+  # password: ""  # Uncomment if password is needed
+
+# System Configuration
+system:
+  enable_tune: true
+  with_mv: false
+  mv: "MV"
+  max_memory: 25000  # in MB
+  hyp_file: "./hyp_files/test_imdb_batch_20_round_100_hyp_5_budget_25000.txt"
+
+# Tuning Configuration
+tuning:
+  hyp_check_rounds: 5
+  rounds: 100
+  super_static_context_size: 2
+  cluster_id_start: 1
+  # Query processing parameters
+  queries_start: 0  # Starting index for query batch
+  batch_size: 20  # Number of queries to process in each batch
+  offset: 0  # Offset for rotating through queries
+
+# Logging Configuration
+logging:
+  log_file: "test_imdb_batch_20_round_100_hyp_5_budget_25000.log"
+  log_level: "DEBUG"
+
+# Table and Column Configuration
+tables:
+  small_table_ignore_threshold: 1000  # Ignore tables with fewer rows
+
+# Bandit Algorithm Parameters
+bandit:
+  input_alpha: 0.05
+  input_lambda: 0.5
+
+# Query Processing
+query:
+  schema: null  # Leave null or specify schema name
+
+# Alternative Database Configurations (commented out)
+# Uncomment the desired configuration below:
+
+# Docker PostgreSQL Configuration
+# database:
+#   dbname: "pgdb"
+#   user: "pguser"
+#   password: "123456"
+#   host: "aidb-postgres-1"
+#   port: 5432
+
+# Local PostgreSQL Configuration
+# database:
+#   dbname: "pgdb"
+#   user: "pguser"
+#   password: "123456"
+#   host: "localhost"
+#   port: 5438

@@ -22,60 +22,83 @@ from bandits.oracle import OracleV1 as Oracle
 import bandits.bandit_helper as bandit_helper
 import constants
 import bandits.bandit_c2ucb as bandits
+from config_loader import (
+    get_db_config,
+    get_system_config,
+    get_tuning_config,
+    get_bandit_config,
+    get_logging_config,
+    get_small_table_threshold,
+    load_config
+)
 
 
 class BanditTuner:
 
     def get_db_config(self):
-        return {
-            "dbname": "pgdb",
-            "user": "pguser",
-            "password": "123456",
-            "host": "aidb-postgres-1",
-            "port": 5432
-        }
-        # return {
-        #     "dbname": "pgdb",
-        #     "user": "pguser",
-        #     "password": "123456",
-        #     "host": "localhost",
-        #     "port": 5438
-        # }
+        """
+        Get database configuration from config file.
+        
+        Returns a dictionary with database connection parameters.
+        Configuration is loaded from config.yaml file.
+        """
+        return get_db_config()
 
-    def __init__(self):
-        # configuring the logger
+        # Alternative configurations can be found in config.yaml:
+        # - Docker PostgreSQL Configuration
+        # - Local PostgreSQL Configuration
+
+    def __init__(self, config_file: str = None):
+        # Load configuration from config file
+        load_config(config_file)
+        system_config = get_system_config()
+        tuning_config = get_tuning_config()
+        logging_config = get_logging_config()
+        bandit_config = get_bandit_config()
+        
+        # Configure the logger
         logging.basicConfig(
-            filename=os.path.join(constants.LOG_PATH, 'test.log'),
-            filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.getLogger().setLevel(logging.DEBUG)
+            filename=os.path.join(constants.LOG_PATH, logging_config['log_file']),
+            filemode='w', format='%(asctime)s - %(levelname)s - %(message)s', force=True)
+        logging.getLogger().setLevel(logging_config['log_level'])
 
-        self.enable_tune = True
-        self.with_mv = True
-        self.mv = 'MV'
-        constants.max_memory = 25000 # TODO max_memory is from configs
+        # Load system configuration
+        self.enable_tune = system_config['enable_tune']
+        self.with_mv = system_config['with_mv']
+        self.mv = system_config['mv']
+        constants.max_memory = system_config['max_memory']
         self.max_memory = constants.max_memory
+        
+        # Load bandit configuration
+        self.input_alpha = bandit_config['input_alpha']
+        self.input_lambda = bandit_config['input_lambda']
 
+        # Initialize database connection
         self.db = PostgresDB(self.get_db_config())
         self.db.connect()
 
-        # get all tables
+        # Get all tables
         self.tables = self.db.get_tables()
 
-        # TODO reset hyp query log
-        # hyp_file_path = os.path.join(helper.get_experiment_folder_path(configs.experiment_id), configs.experiment_id + '_hyp.sql')
-        self.hyp_file = "./hyp_files/temp.txt"
+        # Set hyp file path from configuration
+        self.hyp_file = system_config['hyp_file']
 
         self.init_queries()
 
-        # TODO Get all the columns from the database
+        # Initialize bandits and columns
         self.bandits_dict = {}
         self.columns = {}
         self.column_counts = {}
         self.max_memory -= self.db.get_current_pds_size()
-        self.cluster_id = 1
-        self.super_static_context_size = 2
-        self.hyp_check_rounds = 25
-        self.rounds = 25
+        self.cluster_id = tuning_config['cluster_id_start']
+        self.super_static_context_size = tuning_config['super_static_context_size']
+        self.hyp_check_rounds = tuning_config['hyp_check_rounds']
+        self.rounds = tuning_config['rounds']
+        
+        # Load query processing parameters from configuration
+        self.queries_start = tuning_config['queries_start']
+        self.batch_size = tuning_config['batch_size']
+        self.offset = tuning_config['offset']
 
     def _create_bandits_for_tables(self):
         # Creating bandits for tables
@@ -87,7 +110,7 @@ class BanditTuner:
 
             # Create oracle and the bandit
             oracle = Oracle(self.max_memory)
-            self.bandits_dict[table_name] = bandits.C3UCB(context_size, constants.input_alpha, constants.input_lambda, oracle,
+            self.bandits_dict[table_name] = bandits.C3UCB(context_size, self.input_alpha, self.input_lambda, oracle,
                                                      self.cluster_id)
             self.cluster_id += 1
 
@@ -95,30 +118,30 @@ class BanditTuner:
         if self.with_mv:
             # Creating bandit for MVs
             context_size = self.number_of_columns + len(self.tables) + 4
-            self.bandits_dict[self.mv] = bandits.C3UCB(context_size, constants.input_alpha, constants.input_lambda,
+            self.bandits_dict[self.mv] = bandits.C3UCB(context_size, self.input_alpha, self.input_lambda,
                                              OracleMV(self.max_memory), self.cluster_id)
             self.cluster_id += 1
 
     def _create_super_bandit(self):
         oracle_s = OracleS(self.max_memory)
-        self.super_bandit = bandits.C3UCB(self.cluster_id + self.super_static_context_size, constants.input_alpha, 
-                                     constants.input_lambda, oracle_s)
+        self.super_bandit = bandits.C3UCB(self.cluster_id + self.super_static_context_size, self.input_alpha, 
+                                     self.input_lambda, oracle_s)
 
     def create_bandits(self):
         self._create_bandits_for_tables()
         self._create_bandits_for_MV()
         self._create_super_bandit()
 
-    def init_queries(self, raw_queries: list[str] = [], sql_trainingset: str = "test_workload.sql"):
+    def init_queries(self, raw_queries: list[str] = [], schema: str = None):
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        filepath = os.path.join(base_dir, "workloads", sql_trainingset)
+        # filepath = os.path.join(base_dir, "workloads", sql_trainingset)
 
         if not raw_queries:
             return
             # raw_queries = QueryLoader.load_from_sql(filepath)
 
         self.query_properties = [
-            SQLStructureParser(q, i).to_dict()
+            SQLStructureParser(q, i, schema).to_dict()
             for i, q in enumerate(raw_queries)
         ]
 
@@ -126,7 +149,7 @@ class BanditTuner:
         self.queries = []
 
         for i, query in enumerate(raw_queries):
-            parsed = SQLStructureParser(query, i).to_dict()
+            parsed = SQLStructureParser(query, i, schema).to_dict()
             query_obj = Query(
                 query_id=i,
                 query_string=query,
@@ -157,40 +180,48 @@ class BanditTuner:
 
         total_time = 0.0
 
-        # self.rounds = 30
-        self.current_round = 0
         current_round = 0
-        # for t in range(self.rounds):
-        while True:
+        query_obj_additions = []
+        queries_start = self.queries_start  # From configuration
+        batch_size = self.batch_size  # From configuration
+        offset = self.offset  # From configuration
+        N = len(self.queries)
+
+        while current_round < self.rounds:
             if not self.enable_tune:
                 time.sleep(2)
                 continue
 
-            if self.current_round >= self.rounds:
+            if current_round >= self.rounds:
                 logging.info("Reached max rounds. Ignoring tune signal.")
                 self.enable_tune = False
                 time.sleep(2)
                 continue
             
             # print(f"round: {t}")
-            logging.info(f"----------------round: {self.current_round}----------------")
-            self.current_round += 1
+            logging.info(f"----------------round: {current_round}----------------")
             start_time_round = datetime.datetime.now()
-            # TODO  update queries_start and queries_end
-            queries_start = 0
-            queries_end = 10
-            queries_current_batch = self.queries[queries_start : queries_end]
-
+            
+            queries_end = queries_start + batch_size
+            if queries_end <= N:
+                queries_current_batch = self.queries[queries_start : queries_end]
+            else:
+                part1 = self.queries[queries_start : N]
+                part2 = self.queries[0 : queries_end - N]
+                queries_current_batch = part1 + part2
+            # queries_start = queries_end % N
+            queries_start = (queries_start + offset) % N
+            
             # print("queries_current_batch", queries_current_batch[0])
             query_obj_list_current = []
             for query in queries_current_batch:
                 if query.id in self.query_obj_store:
                     query_obj_in_store = self.query_obj_store[query.id]
                     query_obj_in_store.frequency += 1
-                    query_obj_in_store.last_seen = self.current_round
+                    query_obj_in_store.last_seen = current_round
                     query_obj_in_store.query_strings.append(query.query_string)
                     if query_obj_in_store.first_seen == -1:
-                        query_obj_in_store.first_seen = self.current_round
+                        query_obj_in_store.first_seen = current_round
                 else:
                     query_copy = copy.deepcopy(query)
                     self.query_obj_store[query.id] = query_copy
@@ -202,19 +233,19 @@ class BanditTuner:
 
             # print("self.query_obj_store", self.query_obj_store)
             for key, obj in self.query_obj_store.items():
-                if self.current_round == 0:
+                if current_round == 0:
                     query_obj_list_past.append(obj)
                 else:
-                    if self.current_round - obj.last_seen <= constants.QUERY_MEMORY and 0 <= obj.first_seen < current_round:
+                    if current_round - obj.last_seen <= constants.QUERY_MEMORY and 0 <= obj.first_seen < current_round:
                         query_obj_list_past.append(obj)
-                    elif self.current_round - obj.last_seen > constants.QUERY_MEMORY:
+                    elif current_round - obj.last_seen > constants.QUERY_MEMORY:
                         obj.first_seen = -1
-                    elif obj.first_seen == self.current_round:
+                    elif obj.first_seen == current_round:
                         query_obj_list_new.append(obj)
 
             # We don't want to reset in the first round, if there is new additions or removals we identify a
             # workload change
-            if self.current_round > 0 and len(query_obj_additions) > 0:
+            if current_round > 0 and len(query_obj_additions) > 0:
                 workload_change = len(query_obj_additions) / len(query_obj_list_past)
                 for table_name in self.candidate_tables:
                     self.bandits_dict[table_name].workload_change_trigger(workload_change)
@@ -302,7 +333,7 @@ class BanditTuner:
                     context_vectors.append(
                         numpy.array(list(context_vectors_v2[i]) + list(context_vectors_v1[i]), ndmin=2))
                 # getting the super arm from the bandit
-                chosen_arm_ids[table_name] = self.bandits_dict[table_name].select_arm(context_vectors, self.current_round)
+                chosen_arm_ids[table_name] = self.bandits_dict[table_name].select_arm(context_vectors, current_round)
 
                 # get objects for the chosen set of arm ids
                 if chosen_arm_ids[table_name]:
@@ -325,7 +356,7 @@ class BanditTuner:
 
                 context_vectors = bandit_helper.get_view_encode_cv_v1(self.db, index_arms_for_table, self.all_columns,
                                                                       self.number_of_columns, chosen_arms_last_round)
-                chosen_arm_ids[self.mv] = self.bandits_dict[self.mv].select_arm(context_vectors, self.current_round)
+                chosen_arm_ids[self.mv] = self.bandits_dict[self.mv].select_arm(context_vectors, current_round)
                 chosen_arms[self.mv] = {}
                 if chosen_arm_ids[self.mv]:
                     for (arm_id, ucb) in chosen_arm_ids[self.mv]:
@@ -377,11 +408,11 @@ class BanditTuner:
 
             hyp_cost = 0
             useless = set()
-            if self.current_round < self.hyp_check_rounds:
+            if current_round < self.hyp_check_rounds:
                 # def hyp_check_config(db, schema_name, arm_list_to_add, queries, file_path):
-                hyp_query_plans, _ = hyp_check_config(self.db, constants.SCHEMA_NAME,
+                hyp_query_plans, hyp_cost = hyp_check_config(self.db, constants.SCHEMA_NAME,
                                 added_arms, query_obj_list_current, self.hyp_file)
-                hyp_cost = self.db.get_hyp_cost(self.hyp_file)
+                # hyp_cost = self.db.get_hyp_cost(self.hyp_file)
                 start_time_hyp_reward = datetime.datetime.now()
                 hyp_arm_rewards = bandit_helper.calculate_hyp_reward(query_obj_list_current, hyp_query_plans)
                 end_time_hyp_reward = datetime.datetime.now()
@@ -410,21 +441,22 @@ class BanditTuner:
                 arm_ids = super_chosen_per_table[self.mv] if (self.mv in super_chosen_per_table) else []
                 self.bandits_dict[self.mv].update(arm_ids, arm_rewards, useless, mv_size_weight, index_size_weight)
 
-
             # keeping track of queries that we saw last time
             chosen_arms_last_round = super_chosen_arms
 
-            if self.current_round == (self.rounds - 1):
+            if current_round == (self.rounds - 1):
                 bulk_drop(self.db, constants.SCHEMA_NAME, super_chosen_arms)
 
             end_time_round = datetime.datetime.now()
             current_config_size = self.db.get_current_pds_size()
             logging.info("Size taken by the config: " + str(current_config_size) + "MB")
             # Adding information to the results array
-            actual_round_number = self.current_round
+            actual_round_number = current_round
             recommendation_time = (end_time_round - start_time_round).total_seconds() + hyp_cost - (
                         end_time_create_query - start_time_create_query).total_seconds()
             logging.info("Recommendation cost: " + str(recommendation_time) + ", Hyp Component: " + str(hyp_cost))
+            logging.info("Creation cost: " + str(creation_cost))
+            logging.info("Execution cost: " + str(execution_cost))
             total_round_time = creation_cost + execution_cost + recommendation_time
             results.append([actual_round_number, constants.MEASURE_BATCH_TIME, total_round_time])
             results.append([actual_round_number, constants.MEASURE_INDEX_CREATION_COST, creation_cost])
@@ -436,9 +468,10 @@ class BanditTuner:
             results.append([actual_round_number, constants.MEASURE_TRANSACTIONAL_EXECUTION_COST, cost_transactional])
 
             total_time += total_round_time
+            current_round += 1
 
-            print(f"current total {self.current_round}: ", total_time, ", this round: ", total_round_time)
-            logging.info(f"current total {self.current_round}: {total_time}, this round: {total_round_time}")
+            print(f"current total {current_round}: ", total_time, ", this round: ", total_round_time)
+            logging.info(f"current total {current_round}: {total_time}, this round: {total_round_time}")
 
     def train_MAB(self):
 
@@ -720,6 +753,7 @@ class BanditTuner:
             results.append([actual_round_number, constants.MEASURE_TRANSACTIONAL_EXECUTION_COST, cost_transactional])
 
             total_time += total_round_time
+            # current_round += 1
 
             print(f"current total {t}: ", total_time, ", this round: ", total_round_time)
             logging.info(f"current total {t}: {total_time}, this round: {total_round_time}")

@@ -6,7 +6,7 @@ from sql_queue.loader import SQLLoader
 class TuneManager:
     def __init__(self, redis_mgr):
         self.r = redis_mgr.get_conn()
-        # self.tuner = BanditTuner()
+        self.tuner = BanditTuner()
         self.loader = SQLLoader(redis_mgr)
 
     def auto_tune(self):
@@ -21,7 +21,7 @@ class TuneManager:
         #     "last_seen": data.get("last_seen", ""),
         #     "attributes": json.loads(data.get("attributes", "{}")),
         # }
-        sqls = self.loader.load_top_hit_count(limit=10)
+        sqls = self.loader.load_top_hit_count(limit=1000)
 
         # print(sqls)
         raw_queries = [sql["sql"] for sql in sqls]
