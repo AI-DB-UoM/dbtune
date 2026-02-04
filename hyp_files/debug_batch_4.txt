@@ -1,0 +1,3 @@
+CREATE INDEX ON public.movie_companies (note, company_type_id, movie_id)
+CREATE INDEX ON public.movie_companies USING btree (note, company_type_id, movie_id);
+-- hypopg_reset() called for hypothetical index ix_movie_companies_note_company_type_id_movie_id on public.movie_companies

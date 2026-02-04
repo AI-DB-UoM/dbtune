@@ -7,7 +7,7 @@ from tabulate import tabulate
 class TuneManager:
     def __init__(self, redis_mgr, tune_gap: int = 10):
         self.r = redis_mgr.get_conn()
-        # self.tuner = BanditTuner()
+        self.tuner = BanditTuner()
         self.loader = SQLLoader(redis_mgr)
         self.tune_gap = tune_gap
         self.current_sql_index = 0

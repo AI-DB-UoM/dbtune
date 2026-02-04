@@ -13,15 +13,19 @@ def bulk_create(db, schema_name, bandit_arm_list):
         cost = {}
         for name, bandit_arm in bandit_arm_list.items():
             if type(bandit_arm).__name__ == 'BanditArmMV':
-                cost[name] = db.create_view(bandit_arm.index_name, bandit_arm.view_query,
+                create_view_cost = db.create_view(bandit_arm.index_name, bandit_arm.view_query,
                                         bandit_arm.index_query)
+                if create_view_cost:
+                    cost[name] = create_view_cost
                 if cost[name]:
                     bandit_arm.memory = db.get_arm_size_mv(bandit_arm.index_name)
             else:
-                cost[name] = db.create_index(bandit_arm.table_name, bandit_arm.index_cols,
+                create_index_cost = db.create_index(bandit_arm.table_name, bandit_arm.index_cols,
                                             bandit_arm.index_name,
                                             bandit_arm.include_cols, schema_name)
-                bandit_arm.memory = db.get_arm_size(bandit_arm.index_name)
+                if create_index_cost:
+                    cost[name] = create_index_cost
+                    bandit_arm.memory = db.get_arm_size(bandit_arm.index_name)
         return cost
 
 
@@ -68,7 +72,7 @@ def create_query_v7(db, schema_name, arm_list_to_add, arm_list_to_delete, querie
     for query in queries:
         query_plan = db.execute_query_v2(query.get_query_string())
         if query_plan:
-            cost = query_plan[constants.COST_TYPE_CURRENT_EXECUTION]
+            cost = query_plan[constants.COST_TYPE_CURRENT_EXECUTION] / 1000.0
             if query.id in query_times:
                 query_times[query.id] += cost
                 query_counts[query.id] += 1
@@ -115,6 +119,31 @@ def hyp_bulk_create(db, schema_name, bandit_arm_list, file):
                                             bandit_arm.index_name, file, bandit_arm.include_cols)
     return cost
 
+def hyp_bulk_drop(db, schema_name, bandit_arm_list, file):
+    """
+        Drop multiple hypothetical indexes / materialized views at once.
+        This mirrors hyp_bulk_create and is used when a super arm is reverted.
+
+        :param db: database wrapper (must provide hyp_drop_view / hyp_drop_index_v1)
+        :param schema_name: name of the database schema
+        :param bandit_arm_list: dict of BanditArm objects
+        :param file: log file handle
+        :return: total drop cost
+    """
+    cost = 0
+    for name, bandit_arm in bandit_arm_list.items():
+        if type(bandit_arm).__name__ == 'BanditArmMV':
+            # corresponding to hyp_create_view(...)
+            cost += db.hyp_drop_view(bandit_arm.index_name, file)
+        else:
+            # corresponding to hyp_create_index_v1(...)
+            cost += db.hyp_drop_index_v1(
+                schema_name,
+                bandit_arm.table_name,
+                bandit_arm.index_name,
+                file,
+            )
+    return cost
 
 def hyp_check_config(db, schema_name, arm_list_to_add, queries, file_path):
         """
@@ -129,25 +158,30 @@ def hyp_check_config(db, schema_name, arm_list_to_add, queries, file_path):
         :param queries: queries that should be executed
         :return:
         """
-        cost = 0
+        bulk_create = 0
+        exe_cost = 0
         file = open(file_path, 'w')
         db.get_tables()
-        cost += hyp_bulk_create(db, schema_name, arm_list_to_add, file)
+        bulk_create += hyp_bulk_create(db, schema_name, arm_list_to_add, file)
         query_plans = []
+        logging.info(f"hyp_bulk_create cost: {bulk_create}")
+
         db.hyp_enable_index(file)
         for query in queries:
-            query_plan, exe_cost = db.hyp_execute_query_v2(query.get_query_string(hyp=True), file)
+            query_plan, hyp_execute_cost = db.hyp_execute_query_v2(query.get_query_string(hyp=True), file)
             if query_plan:
                 query_plans.append(query_plan)
-                cost += exe_cost
+                exe_cost += hyp_execute_cost
                 if query.first_seen == query.last_seen:
                     query.original_hyp_running_time = query_plan.sub_tree_cost
             else:
                 print(f"[ERROR] query_plan is none:")
-        bulk_drop(db, schema_name, arm_list_to_add, file)
+        logging.info(f"hyp_execute_query_v2 cost: {exe_cost}")
+
+        hyp_bulk_drop(db, schema_name, arm_list_to_add, file)
         file.close()
 
-        return query_plans, cost
+        return query_plans, exe_cost + bulk_create
 
 
 

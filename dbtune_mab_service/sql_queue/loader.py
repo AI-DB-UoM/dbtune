@@ -50,7 +50,7 @@ class SQLLoader:
         sqls = self.load_all()
         sqls.sort(key=lambda x: (
             -x.get("hit_count", 0),
-            -self._parse_iso(x.get("last_seen", "")).timestamp()  # 时间降序
+            -self._parse_iso(x.get("last_seen", "")).timestamp()  
         ))
         return sqls[:limit]
 

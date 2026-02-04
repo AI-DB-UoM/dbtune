@@ -6,6 +6,7 @@ import json
 import io
 import psycopg2.extras
 import datetime
+import logging
 
 from .column import Column
 from .base_db import BaseDB
@@ -368,7 +369,6 @@ class PostgresDB(BaseDB):
             return None
 
 
-    # TODO Is drop view important here?
     def hyp_create_view(self, view_name, view_query, index_def, file):
         """
         Create a materialized view and a hypothetical index on it using hypopg (PostgreSQL).
@@ -424,6 +424,36 @@ class PostgresDB(BaseDB):
             cursor.close()
 
 
+    def hyp_drop_view(self, view_name, file=None):
+        """
+        Drop a materialized view.
+
+        :param view_name: name of the materialized view
+        :param file: optional writable file handle to log the drop statement
+        :return: time taken to drop the view (seconds)
+        """
+        cursor = self.conn.cursor()
+        drop_sql = f"DROP MATERIALIZED VIEW IF EXISTS {view_name}"
+
+        try:
+            start_time = datetime.datetime.now()
+            cursor.execute(drop_sql)
+            self.conn.commit()
+            end_time = datetime.datetime.now()
+
+            if file:
+                file.write(drop_sql + ';\n')
+
+            return (end_time - start_time).total_seconds()
+        except Exception as e:
+            self.conn.rollback()
+            print(f"View drop failed: {e}")
+            return 0
+        finally:
+            cursor.close()
+
+
+
     def hyp_create_index_v1(self, schema_name, tbl_name, col_names, idx_name, file, include_cols=()):
         """
         Create a hypothetical index on the given table using hypopg in PostgreSQL.
@@ -470,6 +500,42 @@ class PostgresDB(BaseDB):
             # except Exception as e:
             #     self.conn.rollback()
             #     print(f"Failed to reset hypopg: {e}")
+            cursor.close()
+
+    def hyp_drop_index_v1(self, schema_name, tbl_name, idx_name, file=None):
+        """
+        Drop hypothetical indexes created via hypopg.
+
+        NOTE:
+        - hypopg indexes are virtual; we clear them with hypopg_reset().
+        - This will remove ALL hypothetical indexes in the current session.
+
+        :param schema_name: schema name (for logging only)
+        :param tbl_name: table name (for logging only)
+        :param idx_name: logical index name (for logging only)
+        :param file: optional writable file handle to log the action
+        :return: time taken to reset hypopg (seconds)
+        """
+        cursor = self.conn.cursor()
+
+        try:
+            start_time = datetime.datetime.now()
+            cursor.execute("SELECT hypopg_reset();")
+            self.conn.commit()
+            end_time = datetime.datetime.now()
+
+            if file:
+                file.write(
+                    f"-- hypopg_reset() called for hypothetical index {idx_name} "
+                    f"on {schema_name}.{tbl_name}\n"
+                )
+
+            return (end_time - start_time).total_seconds()
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Hypothetical index drop failed: {e}")
+            return 0
+        finally:
             cursor.close()
 
 
@@ -535,6 +601,7 @@ class PostgresDB(BaseDB):
         :param file_path: str, path to the SQL file
         :return: float, total execution time in seconds
         """
+        cursor = None
         try:
             with open(file_path, 'r') as f:
                 lines = f.readlines()
@@ -554,12 +621,18 @@ class PostgresDB(BaseDB):
                 print("-----------------------")
                 print("hyp_query:", hyp_query)
                 print("-----------------------")
+                logging.debug("hyp_query: %s", hyp_query)
                 cursor.execute(hyp_query)
+
+            # re-set hypopg after index creation to avoid accumulation
+            # cursor.execute("SELECT hypopg_reset();")
+
             end_time = datetime.datetime.now()
 
             self.conn.commit()
             elapsed = (end_time - start_time).total_seconds()
             print(f"[INFO] Query executed in {elapsed:.4f} seconds.")
+            logging.debug(f"[INFO] Query executed in {elapsed:.4f} seconds.")
             return elapsed
 
         except Exception as e:

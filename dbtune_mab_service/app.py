@@ -37,13 +37,6 @@ class MABResponse(BaseModel):
     suggestion: str
     task_id: str
 
-# @app.post("/mab/tune", response_model=MABResponse)
-# def mab_tune(req: MABRequest):
-#     options = req.options or {}
-
-#     suggestion = suggest_index(req.table, req.columns, options, [])
-#     return MABResponse(status="ok", suggestion=suggestion, task_id="1")
-
 @app.post("/mab/tune_async")
 def mab_tune_async(req: MABRequest):
     print(f"[RECEIVED QUERY] {req}")  # or use logging

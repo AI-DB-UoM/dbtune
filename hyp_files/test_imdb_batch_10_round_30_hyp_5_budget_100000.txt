@@ -1,0 +1,42 @@
+CREATE INDEX ON public.char_name (name, id)
+CREATE INDEX ON public.movie_info (info, movie_id)
+CREATE INDEX ON public.movie_info (movie_id, info, info_type_id)
+CREATE INDEX ON public.company_name (name, country_code, id)
+CREATE INDEX ON public.title (title, production_year, kind_id, id)
+CREATE INDEX ON public.company_name (country_code)
+CREATE INDEX ON public.movie_info_idx (movie_id, info, info_type_id)
+CREATE INDEX ON public.company_name (id, country_code)
+CREATE INDEX ON public.title (production_year, kind_id, id) INCLUDE (title)
+CREATE INDEX ON public.name (gender, name, id)
+CREATE INDEX ON public.keyword (keyword)
+CREATE INDEX ON public.cast_info (person_role_id, movie_id, role_id, note)
+CREATE INDEX ON public.title (kind_id, title, id)
+CREATE INDEX ON public.cast_info (movie_id, person_role_id, person_id, note, role_id)
+CREATE INDEX ON public.char_name USING btree (name, id);
+CREATE INDEX ON public.movie_info USING btree (info, movie_id);
+CREATE INDEX ON public.movie_info USING btree (movie_id, info, info_type_id);
+CREATE INDEX ON public.company_name USING btree (name, country_code, id);
+CREATE INDEX ON public.title USING btree (title, production_year, kind_id, id);
+CREATE INDEX ON public.company_name USING btree (country_code);
+CREATE INDEX ON public.movie_info_idx USING btree (movie_id, info, info_type_id);
+CREATE INDEX ON public.company_name USING btree (id, country_code);
+CREATE INDEX ON public.title USING btree (production_year, kind_id, id) INCLUDE (title);
+CREATE INDEX ON public.name USING btree (gender, name, id);
+CREATE INDEX ON public.keyword USING btree (keyword);
+CREATE INDEX ON public.cast_info USING btree (person_role_id, movie_id, role_id, note);
+CREATE INDEX ON public.title USING btree (kind_id, title, id);
+CREATE INDEX ON public.cast_info USING btree (movie_id, person_role_id, person_id, note, role_id);
+-- hypopg_reset() called for hypothetical index ix_char_name_name_id on public.char_name
+-- hypopg_reset() called for hypothetical index ix_movie_info_info_movie_id on public.movie_info
+-- hypopg_reset() called for hypothetical index ix_movie_info_movie_id_info_info_type_id on public.movie_info
+-- hypopg_reset() called for hypothetical index ix_company_name_name_country_code_id on public.company_name
+-- hypopg_reset() called for hypothetical index ix_title_title_production_year_kind_id_id on public.title
+-- hypopg_reset() called for hypothetical index ix_company_name_country_code on public.company_name
+-- hypopg_reset() called for hypothetical index ix_movie_info_idx_movie_id_info_info_type_id on public.movie_info_idx
+-- hypopg_reset() called for hypothetical index ix_company_name_id_country_code on public.company_name
+-- hypopg_reset() called for hypothetical index ixn_title_production_year_kind_id_id_titl on public.title
+-- hypopg_reset() called for hypothetical index ix_name_gender_name_id on public.name
+-- hypopg_reset() called for hypothetical index ix_keyword_keyword on public.keyword
+-- hypopg_reset() called for hypothetical index ix_cast_info_person_role_id_movie_id_role_id_note on public.cast_info
+-- hypopg_reset() called for hypothetical index ix_title_kind_id_title_id on public.title
+-- hypopg_reset() called for hypothetical index ix_cast_info_movie_id_person_role_id_person_id_note_role_id on public.cast_info
