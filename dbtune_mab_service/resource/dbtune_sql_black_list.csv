@@ -1,0 +1,15 @@
+sql_keyword,type
+pg_,KEYWORD
+information_schema,KEYWORD
+pg_stat,KEYWORD
+pg_catalog,KEYWORD
+count(,KEYWORD
+begin,START
+commit,START
+rollback,START
+show,START
+set,START
+reset,START
+current_database,KEYWORD
+pg_tables,KEYWORD
+pg_roles,KEYWORD

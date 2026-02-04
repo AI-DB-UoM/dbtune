@@ -2,34 +2,54 @@ from datetime import datetime
 
 # from bandits.sim_c3ucb_vF import BanditTuner
 from sql_queue.loader import SQLLoader
+from tabulate import tabulate
 
 class TuneManager:
-    def __init__(self, redis_mgr):
+    def __init__(self, redis_mgr, tune_gap: int = 10):
         self.r = redis_mgr.get_conn()
         # self.tuner = BanditTuner()
         self.loader = SQLLoader(redis_mgr)
+        self.tune_gap = tune_gap
+        self.current_sql_index = 0
 
-    def auto_tune(self):
+    # TODO how to trigger tune
+    # TODO 1. A simple threshold
+    # TODO 2. Query distribution has been changed
+    # TODO 3. Data drift
+    # TODO 4. Model prediction gets different outputs
+    def auto_tune(self, is_sql_useful):
+
+        print(f"[auto_tune] {is_sql_useful} current index:{self.current_sql_index} total tune threshold:{self.tune_gap}")  # or use logging
+        
+        if is_sql_useful:
+            self.current_sql_index += 1
+    
+        if self.current_sql_index < self.tune_gap:
+            return
         self.immediate_tune()
+        self.current_sql_index = 0
+
 
     def immediate_tune(self):
-        # {
-        #     "hash": sql_hash,
-        #     "sql": data.get("sql", ""),
-        #     "hit_count": int(data.get("hit_count", 0)),
-        #     "timestamp": data.get("timestamp", ""),
-        #     "last_seen": data.get("last_seen", ""),
-        #     "attributes": json.loads(data.get("attributes", "{}")),
-        # }
         sqls = self.loader.load_top_hit_count(limit=10)
+
+        trimmed_sqls = []
+        for entry in sqls:
+            trimmed_sqls.append({
+                "sql": entry["sql"][:40] + "..." if len(entry["sql"]) > 80 else entry["sql"],
+                "hit_count": entry["hit_count"],
+                "timestamp": entry["timestamp"][:19],
+                "last_seen": entry["last_seen"][:19]
+            })
+        print(tabulate(trimmed_sqls, headers="keys", tablefmt="grid"))
 
         # print(sqls)
         raw_queries = [sql["sql"] for sql in sqls]
 
-        print("-" * 50)
-        for query in raw_queries:
-            print(query)
-        print("-" * 50)
+        # print("-" * 50)
+        # for query in raw_queries:
+        #     print(query)
+        # print("-" * 50)
         # self.tuner.init(raw_queries)
         # print("The tuner is going to tune: \n", raw_queries)
         # self.tuner.train_MAB_via_dead_loop()

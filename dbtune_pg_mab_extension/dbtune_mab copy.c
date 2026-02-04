@@ -50,29 +50,7 @@ static size_t writefunc(void *ptr, size_t size, size_t nmemb, void *userdata) {
     return real_size;
 }
 
-static char *escape_json_string(const char *input) {
-    StringInfoData buf;
-    initStringInfo(&buf);
 
-    for (const char *p = input; *p; p++) {
-        switch (*p) {
-            case '\"': appendStringInfoString(&buf, "\\\""); break;
-            case '\\': appendStringInfoString(&buf, "\\\\"); break;
-            case '\b': appendStringInfoString(&buf, "\\b"); break;
-            case '\f': appendStringInfoString(&buf, "\\f"); break;
-            case '\n': appendStringInfoString(&buf, "\\n"); break;
-            case '\r': appendStringInfoString(&buf, "\\r"); break;
-            case '\t': appendStringInfoString(&buf, "\\t"); break;
-            default:
-                if ((unsigned char)*p < 0x20)
-                    appendStringInfo(&buf, "\\u%04x", *p);
-                else
-                    appendStringInfoChar(&buf, *p);
-        }
-    }
-
-    return buf.data;
-}
 
 static void send_query_to_mab(const char *sql_text) {
     CURL *curl = curl_easy_init();
@@ -84,11 +62,8 @@ static void send_query_to_mab(const char *sql_text) {
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
-    // Escape the SQL
-    char *escaped_sql = escape_json_string(sql_text);
-
     StringInfo json = makeStringInfo();
-    appendStringInfo(json, "{\"query\": \"%s\"}", escaped_sql);
+    appendStringInfo(json, "{\"query\": \"%s\"}", sql_text);
 
     char full_url[512];
     sprintf(full_url, "%squery", mab_service_url);
@@ -106,44 +81,56 @@ static void send_query_to_mab(const char *sql_text) {
     curl_easy_cleanup(curl);
 }
 
+static bool is_select_on_user_table_in_current_db(QueryDesc *queryDesc)
+{
+    if (queryDesc->operation != CMD_SELECT)
+        return false;
 
-// static void send_query_to_mab(const char *sql_text) {
-//     CURL *curl = curl_easy_init();
-//     if (!curl) return;
+    ListCell *lc;
+    foreach(lc, queryDesc->plannedstmt->rtable)
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
 
-//     struct curl_string response;
-//     init_string(&response);
+        if (rte->rtekind != RTE_RELATION)
+            continue;  // 跳过子查询、函数调用等
 
-//     struct curl_slist *headers = NULL;
-//     headers = curl_slist_append(headers, "Content-Type: application/json");
+        Oid relid = rte->relid;
+        if (!OidIsValid(relid))
+            continue;
 
-//     StringInfo json = makeStringInfo();
-//     appendStringInfo(json, "{\"query\": \"%s\"}", sql_text);
+        Oid nsp_oid = get_rel_namespace(relid);
+        const char *nspname = get_namespace_name(nsp_oid);
 
-//     char full_url[512];
-//     sprintf(full_url, "%squery", mab_service_url);
+        if (nspname == NULL ||
+            strncmp(nspname, "pg_", 3) == 0 ||
+            strcmp(nspname, "information_schema") == 0)
+        {
+            return false;  // 只要涉及系统表就拒绝
+        }
 
-//     elog(LOG, "[DBTune MAB] Sending query to URL: %s", full_url);
-//     elog(LOG, "[DBTune MAB] JSON payload: %s", json->data);
+        // ⚠️ 当前数据库上下文检查一般不需要，因为 relid 已隐式属于当前数据库
+        // 如果用了 FDW，可加 pg_class.relisshared 判断是否为共享表
+    }
 
-//     curl_easy_setopt(curl, CURLOPT_URL, full_url);
-//     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json->data);
-//     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-//     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-//     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-
-//     curl_easy_perform(curl);
-//     curl_easy_cleanup(curl);
-// }
+    return true; // 所有表都满足条件
+}
 
 /* Hooked ExecutorStart */
 static void my_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
+    if (!dbname_cached) {
+        const char *dbname = get_database_name(MyDatabaseId);
+        strlcpy(current_dbname, dbname, NAMEDATALEN);
+        elog(LOG, "[HOOK] Cached current db name: %s", current_dbname);
+        dbname_cached = true;
+    }
+    
     if (queryDesc && queryDesc->sourceText) {
         elog(LOG, "[HOOK] Query: %s", queryDesc->sourceText);
         elog(LOG, "[HOOK] eflags: %d", eflags);
-        // elog(LOG, "[HOOK] Query Type: %d", queryDesc->operation);
-        if (dbtune_mab_tuning && mab_service_url) {
+        elog(LOG, "[HOOK] DB: %s", get_database_name(MyDatabaseId));
+        elog(LOG, "[HOOK] Query Type: %d", queryDesc->operation);
+        if (dbtune_mab_tuning && mab_service_url && is_select_on_user_table_in_current_db(queryDesc)) {
             if (pg_strcasecmp(queryDesc->sourceText, "select dbtune_mab_tune();") != 0) {
                 send_query_to_mab(queryDesc->sourceText);
             } else {

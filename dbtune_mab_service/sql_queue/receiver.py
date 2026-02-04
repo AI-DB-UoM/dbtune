@@ -2,10 +2,24 @@ from redis_manager import RedisManager
 import hashlib
 import json
 from datetime import datetime
+import csv
 
 class SQLReceiver:
     def __init__(self, redis_mgr=None):
         self.r = redis_mgr.get_conn()
+        self.black_list_start, self.black_list_keyword = self._load_blacklist()
+
+    def _load_blacklist(self, csv_path="./resource/dbtune_sql_black_list.csv"):
+        start_list = []
+        keyword_list = []
+        with open(csv_path, newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row["type"] == "START":
+                    start_list.append(row["sql_keyword"].lower())
+                elif row["type"] == "KEYWORD":
+                    keyword_list.append(row["sql_keyword"].lower())
+        return start_list, keyword_list
 
     def normalize_sql(self, sql):
         return sql.strip().lower()
@@ -31,8 +45,29 @@ class SQLReceiver:
         })
         print(f"[NEW] Stored SQL: {sql}")
 
+    def _sql_filter(self, sql):
+        if not (sql.startswith("select") or sql.startswith("with")):
+            return False
+
+        # Check START list
+        for bad_start in self.black_list_start:
+            if sql.startswith(bad_start):
+                return False
+
+        # Check KEYWORD list
+        for keyword in self.black_list_keyword:
+            if keyword in sql:
+                return False
+
+        return True
+
     def receive(self, raw_sql):
         sql = self.normalize_sql(raw_sql)
+
+        if not self._sql_filter(sql):
+            print(f"Query '{sql}' cannot be added into the pool.")
+            return False
+
         sql_hash = self.hash_sql(sql)
 
         print(sql, sql_hash)
@@ -59,6 +94,7 @@ class SQLReceiver:
         #     print(f"Last Seen: {item['last_seen']}")
         #     print(f"Attributes: {item['attributes']}")
         #     print("-" * 50)
+        return True
 
     def get_all_sql_in_queue(self):
         hashes = self.r.lrange("sql_queue", 0, -1)

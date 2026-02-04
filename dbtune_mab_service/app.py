@@ -50,7 +50,7 @@ def mab_tune_async(req: MABRequest):
     # if False:  # Always false, so no task is created
     #     task = run_mab_task.delay(req.dict())
     #     return {"task_id": task.id}
-    return {"task_id": "noop"}  # Dummy ID to simulate success
+    return {"task_id": "this_is_the_task_id"}  # Dummy ID to simulate success
     # task = run_mab_task.delay(req.dict())
     # return {"task_id": task.id}
 
@@ -60,14 +60,9 @@ def mab_tune_query(req: MABQueryRequest):
     print(f"[RECEIVED REQUEST] {req}")  # or use logging
     print(f"[RECEIVED QUERY] {req.query}")  # or use logging
 
-    # if False:  # Always false, so no task is created
-    #     task = run_mab_task.delay(req.dict())
-    #     return {"task_id": task.id}
-
-    # TODO filter out queries that are not relate to the db schema.
-
-    receiver.receive(req.query)
-    tune_mgr.auto_tune()
+    sql = req.query.lower()
+    is_sql_useful = receiver.receive(sql)
+    tune_mgr.auto_tune(is_sql_useful)
     return {"suggestion": "Return current status??"}  # Dummy ID to simulate success
     # task = run_mab_task.delay(req.dict())
     # return {"task_id": task.id}
@@ -81,6 +76,7 @@ def dbtune_mab_tune(req: MABQueryRequest):
 
     if req.query.lower() == "select dbtune_mab_tune();":
         print("Triger MAB tuning")
+        receiver.receive(req.query.lower())
         tune_mgr.immediate_tune()
 
     return {"suggestion": "CREATE INDEX [IF NOT EXISTS] index_name ON table_name(column1, column2, ...);"}  # Dummy ID to simulate success

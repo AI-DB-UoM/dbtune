@@ -215,7 +215,7 @@ def get_estimated_size_of_mv_v2(db, payload, mv_query, count_query, count_query_
             key_columns_length = get_column_data_length(db, tbl_name, columns)
             total_row_length += key_columns_length
 
-        rows_per_page = 8096/(total_row_length + nullable_buffer + header_size)
+        rows_per_page = 8192 / (total_row_length + nullable_buffer + header_size)
         number_of_leafs = estimated_rows/rows_per_page
 
         return (8192 * number_of_leafs) / float(1024 * 1024)
