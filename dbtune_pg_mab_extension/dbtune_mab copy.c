@@ -92,7 +92,7 @@ static bool is_select_on_user_table_in_current_db(QueryDesc *queryDesc)
         RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
 
         if (rte->rtekind != RTE_RELATION)
-            continue;  // 跳过子查询、函数调用等
+            continue;  // Skip subqueries, function calls, and non-table entries.
 
         Oid relid = rte->relid;
         if (!OidIsValid(relid))
@@ -105,14 +105,15 @@ static bool is_select_on_user_table_in_current_db(QueryDesc *queryDesc)
             strncmp(nspname, "pg_", 3) == 0 ||
             strcmp(nspname, "information_schema") == 0)
         {
-            return false;  // 只要涉及系统表就拒绝
+            return false;  // Reject if any system table is involved.
         }
 
-        // ⚠️ 当前数据库上下文检查一般不需要，因为 relid 已隐式属于当前数据库
-        // 如果用了 FDW，可加 pg_class.relisshared 判断是否为共享表
+        // Current database context check is usually unnecessary because relid
+        // already belongs to the active database. For FDW cases, you may also
+        // check pg_class.relisshared for shared relations.
     }
 
-    return true; // 所有表都满足条件
+    return true; // All referenced tables satisfy the check.
 }
 
 /* Hooked ExecutorStart */

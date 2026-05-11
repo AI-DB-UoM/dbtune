@@ -18,7 +18,7 @@ FROM pg_indexes
 WHERE schemaname = 'public'
   AND (
         indexname LIKE 'ixn\_%' ESCAPE '\'   -- ixn_*
-        OR indexname LIKE 'ix%'              -- ix*（包含 ixn_）
+        OR indexname LIKE 'ix%'              -- ix* (including ixn_*)
         OR indexname LIKE 'mv\_%' ESCAPE '\' -- mv_*
       )
 ORDER BY tablename, indexname;

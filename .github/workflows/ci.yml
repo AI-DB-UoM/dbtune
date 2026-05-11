@@ -35,8 +35,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Block Chinese characters in changed files
-        run: python scripts/check_no_chinese.py "${{ needs.prepare.outputs.base }}" "${{ needs.prepare.outputs.head }}"
+      - name: Block Chinese characters in all tracked files
+        run: python scripts/check_no_chinese.py --all
 
   python-quality:
     needs: prepare

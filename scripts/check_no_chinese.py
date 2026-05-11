@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Fail if changed text files contain Chinese characters."""
+"""Fail if target text files contain Chinese characters."""
 
 from __future__ import annotations
 
 import subprocess
 import sys
 from pathlib import Path
+import argparse
 
 
 def run(cmd: list[str]) -> str:
@@ -17,6 +18,11 @@ def changed_files(base: str, head: str) -> list[str]:
         out = run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", head])
         return [line for line in out.splitlines() if line]
     out = run(["git", "diff", "--name-only", base, head])
+    return [line for line in out.splitlines() if line]
+
+
+def tracked_files() -> list[str]:
+    out = run(["git", "ls-files"])
     return [line for line in out.splitlines() if line]
 
 
@@ -46,10 +52,17 @@ def contains_han(text: str) -> bool:
 
 
 def main() -> int:
-    base = sys.argv[1] if len(sys.argv) > 1 else ""
-    head = sys.argv[2] if len(sys.argv) > 2 else "HEAD"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("base", nargs="?", default="")
+    parser.add_argument("head", nargs="?", default="HEAD")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Scan all tracked files instead of only changed files.",
+    )
+    args = parser.parse_args()
 
-    files = changed_files(base, head)
+    files = tracked_files() if args.all else changed_files(args.base, args.head)
     violations: list[tuple[str, int, str]] = []
 
     for rel in files:
@@ -70,17 +83,18 @@ def main() -> int:
                 break
 
     if violations:
-        print("Found Chinese characters in changed files:")
+        scope = "tracked files" if args.all else "changed files"
+        print(f"Found Chinese characters in {scope}:")
         for file, line_no, line in violations:
             preview = line[:120]
             print(f"- {file}:{line_no}: {preview}")
         print("\nPlease remove Chinese text before pushing.")
         return 1
 
-    print("No Chinese characters found in changed files.")
+    scope = "tracked files" if args.all else "changed files"
+    print(f"No Chinese characters found in {scope}.")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

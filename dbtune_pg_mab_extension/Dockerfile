@@ -9,6 +9,6 @@ WORKDIR /plugin
 
 RUN make && make install
 
-# 自动启用插件
+# Enable extension-related defaults
 RUN echo "shared_preload_libraries = 'dbtune_mab'" >> /usr/share/postgresql/postgresql.conf.sample
 RUN echo "dbtune.enable_mab = on" >> /usr/share/postgresql/postgresql.conf.sample
