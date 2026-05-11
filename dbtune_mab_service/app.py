@@ -37,6 +37,10 @@ class MABResponse(BaseModel):
     suggestion: str
     task_id: str
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.post("/mab/tune_async")
 def mab_tune_async(req: MABRequest):
     print(f"[RECEIVED QUERY] {req}")  # or use logging
@@ -53,6 +57,9 @@ def mab_tune_query(req: MABQueryRequest):
     print(f"[RECEIVED REQUEST] {req}")  # or use logging
     print(f"[RECEIVED QUERY] {req.query}")  # or use logging
 
+    if not req.query:
+        raise HTTPException(status_code=400, detail="query is required")
+
     sql = req.query.lower()
     is_sql_useful = receiver.receive(sql)
     tune_mgr.auto_tune(is_sql_useful)
@@ -66,6 +73,9 @@ def dbtune_mab_tune(req: MABQueryRequest):
 
     print(f"[RECEIVED REQUEST] {req}")  # or use logging
     print(f"[RECEIVED QUERY] {req.query}")  # or use logging
+
+    if not req.query:
+        raise HTTPException(status_code=400, detail="query is required")
 
     if req.query.lower() == "select dbtune_mab_tune();":
         print("Triger MAB tuning")

@@ -1,95 +1,87 @@
 # dbtune
 
+`dbtune` 是一个面向 PostgreSQL 的自动索引调优原型项目，目标是把“工作负载观察 + 索引建议 + 数据库扩展能力”串成可迭代的调优闭环。
 
+## 项目意义
 
-## Project Structure
+- 降低手工调优门槛：把经验型索引调优流程工具化。
+- 支持在线演进：通过服务化接口持续接收查询并触发调优逻辑。
+- 连接研究与工程：将 MAB（多臂老虎机）策略与 PG 扩展联动验证。
 
-```bash
-AIDB/
-├── dbtune_mab_service/               # Python-based MAB tuning microservice
-│   ├── bandits/                      # Multi-armed bandit algorithms (e.g., C3UCB, Thompson Sampling)
-│   ├── configs/                      # Configuration files for workloads and experiments
-│   ├── db_tools/                     # PostgreSQL wrappers and tuning utilities
-│   ├── hyp_files/                    # Hypothetical index metadata
-│   ├── logs/                         # Logging outputs
-│   ├── notebooks/                    # (Optional) Jupyter notebooks for analysis
-│   ├── resource/                     # Static resources
-│   ├── shared/                       # Shared classes/utilities across modules
-│   ├── test_inputs/                 # Query input samples for testing
-│   ├── tests/                        # Pytest test suite
-│   ├── workloads/                    # Workload SQL definitions
-│   ├── app.py                        # FastAPI app entrypoint
-│   ├── celery_worker.py              # Celery worker for async execution
-│   ├── constants.py, schemas.py      # Core data structures and constants
-│   └── requirements.txt              # Python dependencies
-│
-├── dbtune_pg_mab_extension/         # PostgreSQL C extension for MAB
-│   ├── dbtune_mab--0.0.1.sql         # SQL installation script
-│   ├── dbtune_mab.c                  # C source for custom PG function
-│   ├── dbtune_mab.control            # PG extension control file
-│   ├── Makefile, Dockerfile          # Build tools for PG extension
-│   └── logs/, hyp_files/             # Extension logs and metadata
-│
-├── hyp_files/                        # Global hypothetical index records
-├── logs/                             # Top-level logs (optional)
-├── docker-compose.yml                # Docker orchestration file
-```
+## 当前组成
 
-## Setup Instructions
+- `dbtune_mab_service/`：FastAPI + Celery + Redis 的调优服务层。
+- `dbtune_pg_mab_extension/`：PostgreSQL C 扩展（实验能力）。
+- `docker-compose.yml`：本地一键拉起 PostgreSQL、Redis、API、Worker。
 
-### Docker Commands
+## 快速开始（Docker）
+
+### 1) 启动
 
 ```bash
-# Stop all containers and remove volumes/networks
 docker compose down --volumes --remove-orphans
-
-# Rebuild everything from scratch
 docker compose up --build
-
-# Or just start containers (no rebuild)
-docker compose up
 ```
 
-### Test services
-
-
-
-### Generate Benchmark Data
-
-> (You should add instructions here if you're using dsdgen or other scripts.)
-
-For example:
-```bash
-cd /path/to/tpcds-kit/tools
-./dsdgen -scale 1 -dir /data/tpcds_data
-```
-
-### Import Data & Run Queries
-
-> (Specify your import method: COPY, psql, or Python scripts.)
-
-### Install Database Extensions
+### 2) 健康检查
 
 ```bash
-apt update && apt install -y git make gcc postgresql-server-dev-15
-
-cd /tmp
-git clone https://github.com/HypoPG/hypopg.git
-cd hypopg
-make && make install
-
-apt remove -y git make gcc postgresql-server-dev-15
-apt autoremove -y && apt clean
-rm -rf /tmp/hypopg
+curl -s http://127.0.0.1:5050/health
 ```
 
-### Enable Extensions in PostgreSQL
+预期返回：
+
+```json
+{"status":"ok"}
+```
+
+### 3) 触发一次调优请求（示例）
 
 ```bash
--- Run inside PostgreSQL to activate the extension
-CREATE EXTENSION hypopg;
--- If needed (for custom extensions)
-CREATE FUNCTION dbtune_mab_tune(text, text[]) RETURNS text
-AS 'dbtune_mab', 'dbtune_mab_tune'
-LANGUAGE C STRICT;
+curl -s -X POST http://127.0.0.1:5050/mab/tune_async \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "table": "users",
+    "columns": ["age", "income"],
+    "options": {
+      "query_file": "/app/test_inputs/test.sql",
+      "config_file": "/app/test_inputs/config.yaml"
+    }
+  }'
 ```
+
+## 本地开发
+
+### 运行测试
+
+```bash
+pytest -q
+```
+
+说明：
+
+- 集成测试在外部依赖（PostgreSQL/Redis/服务）不可用时会自动 `skip`。
+- 单元和配置测试默认可执行。
+
+## 版本与发布策略
+
+- 当前版本记录在根目录 `VERSION`，从 `0.1.0` 开始。
+- 采用语义化版本（SemVer）：
+  - `MAJOR`：不兼容变更
+  - `MINOR`：向后兼容的新功能
+  - `PATCH`：向后兼容的问题修复
+- 每次版本变更必须同步更新：
+  - `VERSION`
+  - `CHANGELOG.md`
+  - 如有用户可见行为变化，同步更新本 README。
+
+## Changelog
+
+- 变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+- 推荐每个小版本只做“少量可验证功能”，保持可回滚、可复现。
+
+## 项目状态（v0.1.0 基线）
+
+- 已具备：基础服务编排、健康检查接口、测试基线与版本化流程。
+- 进行中：调优算法与真实工作负载联调、扩展能力增强、更多端到端验证。
+

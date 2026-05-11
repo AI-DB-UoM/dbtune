@@ -14,6 +14,11 @@ services:
       - "5438:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser -d pgdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mab_api:
     build: ./dbtune_mab_service
@@ -22,6 +27,13 @@ services:
     volumes:
       - ./dbtune_mab_service:/app         # load code
     command: uvicorn app:app --host 0.0.0.0 --port 5050 --reload  # hot deploy
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mab_worker:
     build: ./dbtune_mab_service
@@ -35,6 +47,11 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:

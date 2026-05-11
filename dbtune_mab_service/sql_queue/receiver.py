@@ -3,6 +3,7 @@ import hashlib
 import json
 from datetime import datetime
 import csv
+from pathlib import Path
 
 class SQLReceiver:
     def __init__(self, redis_mgr=None):
@@ -12,7 +13,9 @@ class SQLReceiver:
     def _load_blacklist(self, csv_path="./resource/dbtune_sql_black_list.csv"):
         start_list = []
         keyword_list = []
-        with open(csv_path, newline='') as f:
+        csv_abspath = Path(__file__).resolve().parents[1] / "resource" / "dbtune_sql_black_list.csv"
+        csv_file = csv_abspath if csv_path == "./resource/dbtune_sql_black_list.csv" else Path(csv_path)
+        with open(csv_file, newline='') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row["type"] == "START":

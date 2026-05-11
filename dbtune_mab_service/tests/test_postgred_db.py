@@ -23,7 +23,10 @@ def _get_db_config():
 def db():
     config = _get_db_config()
     db = PostgresDB(config)
-    db.connect()
+    try:
+        db.connect()
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL test dependency is unavailable: {exc}")
     yield db
     if db.conn and db.conn.closed == 0:
         db.conn.close()

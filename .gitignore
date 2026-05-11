@@ -55,5 +55,12 @@ dbtune_pg_mab_extension/dbtune_mab--*.sql
 
 # Except README.md
 !README.md 
+!CHANGELOG.md
 
 auto.conf.bak
+
+# Local Codex workspace
+.codex/
+
+# Local experimental workspace
+tuneflow/

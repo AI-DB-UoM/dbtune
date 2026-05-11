@@ -8,3 +8,4 @@ redis
 sqlglot
 psycopg2-binary
 numpy
+tabulate

@@ -1,13 +1,13 @@
 from datetime import datetime
 
-# from bandits.sim_c3ucb_vF import BanditTuner
 from sql_queue.loader import SQLLoader
 from tabulate import tabulate
 
 class TuneManager:
     def __init__(self, redis_mgr, tune_gap: int = 10):
         self.r = redis_mgr.get_conn()
-        self.tuner = BanditTuner()
+        # Keep tuner optional so API can start in minimal mode without full DB/config deps.
+        self.tuner = None
         self.loader = SQLLoader(redis_mgr)
         self.tune_gap = tune_gap
         self.current_sql_index = 0

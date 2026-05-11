@@ -144,6 +144,11 @@ class Index:
         self.index_kind = index_kind
 
 
+# Backward-compatible aliases used by existing tests/callers.
+PgIndexRead = PGIndexRead
+PgIndexWrite = IndexWrite
+
+
 
 
 
