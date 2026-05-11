@@ -1,0 +1,164 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+      - "feature/**"
+  pull_request:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.diff.outputs.base }}
+      head: ${{ steps.diff.outputs.head }}
+    steps:
+      - name: Set diff range
+        id: diff
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  no-chinese:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block Chinese characters in changed files
+        run: python scripts/check_no_chinese.py "${{ needs.prepare.outputs.base }}" "${{ needs.prepare.outputs.head }}"
+
+  python-quality:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r dbtune_mab_service/requirements.txt
+          pip install black ruff pytest
+
+      - name: Python syntax check
+        run: python -m compileall dbtune_mab_service test scripts
+
+      - name: Python format and lint on changed files
+        env:
+          BASE: ${{ needs.prepare.outputs.base }}
+          HEAD: ${{ needs.prepare.outputs.head }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASE" && "${BASE//0/}" == "" ]]; then
+            git diff-tree --no-commit-id --name-only -z -r "$HEAD" > /tmp/changed.z
+          else
+            git diff --name-only -z "$BASE" "$HEAD" > /tmp/changed.z
+          fi
+
+          py_files=()
+          while IFS= read -r -d '' file; do
+            [[ "$file" == *.py ]] && py_files+=("$file")
+          done < /tmp/changed.z
+
+          if (( ${#py_files[@]} > 0 )); then
+            black --check "${py_files[@]}"
+            ruff check "${py_files[@]}"
+          else
+            echo "No changed Python files."
+          fi
+
+      - name: Run tests
+        run: pytest -q
+
+  c-extension:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install C/PostgreSQL build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang-format libcurl4-openssl-dev postgresql-server-dev-15
+
+      - name: C format check on changed files
+        env:
+          BASE: ${{ needs.prepare.outputs.base }}
+          HEAD: ${{ needs.prepare.outputs.head }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASE" && "${BASE//0/}" == "" ]]; then
+            git diff-tree --no-commit-id --name-only -z -r "$HEAD" > /tmp/changed.z
+          else
+            git diff --name-only -z "$BASE" "$HEAD" > /tmp/changed.z
+          fi
+
+          c_files=()
+          while IFS= read -r -d '' file; do
+            if [[ "$file" == *.c || "$file" == *.h ]]; then
+              c_files+=("$file")
+            fi
+          done < /tmp/changed.z
+
+          if (( ${#c_files[@]} > 0 )); then
+            clang-format --dry-run --Werror "${c_files[@]}"
+          else
+            echo "No changed C/C header files."
+          fi
+
+      - name: Build PostgreSQL extension (PGXS)
+        run: make -C dbtune_pg_mab_extension clean all
+
+      - name: Build postgres image with extension
+        run: docker build -t dbtune-pg-ext-ci ./dbtune_pg_mab_extension
+
+      - name: Verify extension can be created in PostgreSQL
+        run: |
+          set -euo pipefail
+          docker rm -f dbtune-pg-ci >/dev/null 2>&1 || true
+          docker run -d --name dbtune-pg-ci \
+            -e POSTGRES_USER=pguser \
+            -e POSTGRES_PASSWORD=123456 \
+            -e POSTGRES_DB=pgdb \
+            -p 55432:5432 \
+            dbtune-pg-ext-ci
+
+          for _ in {1..60}; do
+            if docker exec dbtune-pg-ci pg_isready -U pguser -d pgdb >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION IF NOT EXISTS dbtune_mab;"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_mab';"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f dbtune-pg-ci >/dev/null 2>&1 || true
+
