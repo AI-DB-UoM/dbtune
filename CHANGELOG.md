@@ -6,6 +6,8 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-14
+
 ### Added
 - Added CI coverage for CoLSE extension build (`make -C dbtune_pg_colse_extension clean all`).
 - Added CI Docker verification for the combined PostgreSQL image (`docker/postgres-with-extensions.Dockerfile`).

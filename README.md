@@ -87,7 +87,7 @@ Notes:
 
 ## Versioning and Release Policy
 
-- Current project version is tracked in `VERSION`, starting from `0.1.0`.
+- Current project version is tracked in `VERSION` (current: `0.1.3`).
 - Semantic Versioning (SemVer):
   - `MAJOR`: incompatible changes
   - `MINOR`: backward-compatible features
@@ -102,7 +102,8 @@ Notes:
 - See [CHANGELOG.md](CHANGELOG.md) for release-by-release changes.
 - Prefer small, verifiable increments for each version to keep rollbacks easy.
 
-## Project Status (v0.1.0 Baseline)
+## Project Status (v0.1.3)
 
-- Available: service orchestration, health endpoint, test baseline, and versioned release workflow.
-- In progress: deeper tuning algorithm integration, real workload validation, and expanded end-to-end verification.
+- Available: service orchestration, health endpoints (`5050` + `5060`), hmab + CoLSE dual extension integration, and versioned release workflow.
+- Available: CI quality gates for Python/C plus PostgreSQL extension build and install verification.
+- In progress: replacing the CoLSE stub with full model integration and expanding real workload validation coverage.
