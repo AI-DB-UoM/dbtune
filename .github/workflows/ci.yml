@@ -117,6 +117,19 @@ jobs:
             exit 1
           fi
 
+          # PGXS from some PostgreSQL packages expects /usr/bin/clang-19 for
+          # LLVM bitcode generation. Ensure it exists on GitHub runners.
+          if ! command -v clang >/dev/null 2>&1; then
+            sudo apt-get install -y clang
+          fi
+          if ! command -v clang-19 >/dev/null 2>&1; then
+            if apt-cache show clang-19 >/dev/null 2>&1; then
+              sudo apt-get install -y clang-19
+            else
+              sudo ln -sf "$(command -v clang)" /usr/bin/clang-19
+            fi
+          fi
+
       - name: C format check on changed files
         env:
           BASE: ${{ needs.prepare.outputs.base }}
