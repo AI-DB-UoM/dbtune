@@ -37,10 +37,6 @@ env/
 venv/
 pip-log.txt
 
-# Compiled binary and control files
-dbtune_pg_mab_extension/dbtune_mab.control
-dbtune_pg_mab_extension/dbtune_mab--*.sql
-
 # Makefile products
 *.a
 *.dSYM/
