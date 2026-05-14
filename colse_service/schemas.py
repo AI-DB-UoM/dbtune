@@ -12,4 +12,3 @@ class CoLSEEstimateResponse(BaseModel):
     cardinality_estimate: float
     model: str
     normalized_query: str | None = None
-

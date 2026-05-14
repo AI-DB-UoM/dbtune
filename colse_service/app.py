@@ -26,4 +26,3 @@ def estimate(req: CoLSEEstimateRequest):
         model="colse-stub-v0",
         normalized_query=normalized,
     )
-

@@ -49,7 +49,9 @@ def test_async_tune_endpoint():
             assert "result" in status_data
             return
         if status == "error":
-            pytest.skip(f"Service reported async tune error in this environment: {status_data}")
+            pytest.skip(
+                f"Service reported async tune error in this environment: {status_data}"
+            )
 
         time.sleep(1)
 

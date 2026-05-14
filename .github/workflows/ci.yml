@@ -59,7 +59,7 @@ jobs:
           pip install black ruff pytest
 
       - name: Python syntax check
-        run: python -m compileall dbtune_mab_service test scripts
+        run: python -m compileall dbtune_mab_service colse_service test scripts
 
       - name: Python format and lint on changed files
         env:
@@ -101,16 +101,20 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential clang-format libcurl4-openssl-dev postgresql-common
-          if apt-cache show postgresql-server-dev-all >/dev/null 2>&1; then
+          sudo apt-get install -y build-essential clang-format libcurl4-openssl-dev
+
+          # Prefer a concrete PostgreSQL server dev package to avoid
+          # postgresql-common version conflicts on ubuntu-latest runners.
+          DEV_PKG="$(apt-cache search '^postgresql-server-dev-[0-9]+$' | awk '{print $1}' | sort -V | tail -1)"
+          if [[ -n "${DEV_PKG}" ]]; then
+            echo "Installing PostgreSQL dev package: ${DEV_PKG}"
+            sudo apt-get install -y "${DEV_PKG}"
+          elif apt-cache show postgresql-server-dev-all >/dev/null 2>&1; then
+            echo "Falling back to postgresql-server-dev-all"
             sudo apt-get install -y postgresql-server-dev-all
           else
-            DEV_PKG="$(apt-cache search '^postgresql-server-dev-[0-9]+$' | awk '{print $1}' | sort -V | tail -1)"
-            if [[ -z "${DEV_PKG}" ]]; then
-              echo "No postgresql-server-dev-* package found" >&2
-              exit 1
-            fi
-            sudo apt-get install -y "${DEV_PKG}"
+            echo "No PostgreSQL server development package found" >&2
+            exit 1
           fi
 
       - name: C format check on changed files

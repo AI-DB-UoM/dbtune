@@ -1,14 +1,14 @@
+import io
 import os
 import sys
-import pytest
-import io
-import json
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pytest
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from db_tools.column import Column
-
 from db_tools.postgres_db import PostgresDB
+from db_tools.qplan_pg.index_use import PgIndexRead, PgIndexWrite
 
 
 def _get_db_config():
@@ -17,8 +17,9 @@ def _get_db_config():
         "user": "pguser",
         "password": "123456",
         "host": "localhost",
-        "port": 5438
+        "port": 5438,
     }
+
 
 @pytest.fixture(scope="session")
 def db():
@@ -83,9 +84,11 @@ def _require_hypopg(db):
     finally:
         cursor.close()
 
+
 @pytest.mark.order(1)
 def test_db_connects_successfully(db):
     assert db.conn is not None
+
 
 @pytest.mark.order(2)
 def test_get_table_row_count(db):
@@ -96,11 +99,13 @@ def test_get_table_row_count(db):
     # Some environments return -1 when PostgreSQL stats are not available yet.
     assert isinstance(count, int) and count >= -1
 
+
 @pytest.mark.order(3)
 def test_get_current_pds_size(db):
     size = db.get_current_pds_size()
     # print("test_get_current_pds_size:", size)
     assert isinstance(size, float) or size is None
+
 
 # @pytest.mark.order(4)
 # def test_get_columns_for_table(db):
@@ -116,6 +121,7 @@ def test_get_current_pds_size(db):
 #     assert isinstance(cols, list), "Columns should be a list."
 #     assert all(isinstance(c, str) for c in cols), "All column names should be strings."
 #     assert len(cols) > 0, "Table should have at least one column."
+
 
 @pytest.mark.order(4)
 def test_get_columns_for_table(db):
@@ -151,6 +157,7 @@ def test_get_all_columns(db):
     print(f"all_cols, total: {all_cols}, {total}")
     assert total > 0
 
+
 @pytest.mark.order(6)
 def test_get_primary_key(db):
     tables = db.get_tables()
@@ -161,6 +168,7 @@ def test_get_primary_key(db):
         # print(f"[{table_name}] Primary Key: {pk}")
         assert isinstance(pk, list)
 
+
 @pytest.mark.order(7)
 def test_get_tables(db):
     tables = db.get_tables()
@@ -169,12 +177,14 @@ def test_get_tables(db):
     assert isinstance(tables, dict)
     assert len(tables) > 0
 
+
 # Constants for testing
 SCHEMA_NAME = "public"
 TABLE_NAME = "store_sales"
 INDEX_NAME = "test_idx"
 VIEW_NAME = "test_mv"
 COLUMN_NAMES = ["ss_item_sk", "ss_ticket_number"]
+
 
 @pytest.fixture(scope="module")
 def clean_index(db):
@@ -183,6 +193,7 @@ def clean_index(db):
     yield
     db.drop_index(INDEX_NAME)
 
+
 @pytest.fixture(scope="module")
 def clean_view(db):
     # Ensure view doesn't exist before/after
@@ -190,22 +201,29 @@ def clean_view(db):
     yield
     db.drop_view(VIEW_NAME, materialized=True)
 
+
 @pytest.mark.order(8)
 def test_create_index(db, clean_index):
     _require_columns(db, SCHEMA_NAME, TABLE_NAME, COLUMN_NAMES)
 
-    elapsed = db.create_index(TABLE_NAME, COLUMN_NAMES, INDEX_NAME, include_cols=(), schema_name=SCHEMA_NAME)
+    elapsed = db.create_index(
+        TABLE_NAME, COLUMN_NAMES, INDEX_NAME, include_cols=(), schema_name=SCHEMA_NAME
+    )
     assert elapsed is not None and elapsed > 0
 
     cursor = db.conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT indexname FROM pg_indexes 
         WHERE schemaname = %s AND tablename = %s AND indexname = %s
-    """, (SCHEMA_NAME, TABLE_NAME, INDEX_NAME))
+    """,
+        (SCHEMA_NAME, TABLE_NAME, INDEX_NAME),
+    )
     result = cursor.fetchone()
     print("result:", result)
     assert result is not None and result[0] == INDEX_NAME
     cursor.close()
+
 
 @pytest.mark.order(9)
 def test_drop_index(db):
@@ -214,31 +232,41 @@ def test_drop_index(db):
     db.drop_index(INDEX_NAME)
 
     cursor = db.conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT indexname FROM pg_indexes 
         WHERE schemaname = %s AND tablename = %s AND indexname = %s
-    """, (SCHEMA_NAME, TABLE_NAME, INDEX_NAME))
+    """,
+        (SCHEMA_NAME, TABLE_NAME, INDEX_NAME),
+    )
     result = cursor.fetchone()
     assert result is None
     cursor.close()
+
 
 @pytest.mark.order(10)
 def test_create_view(db, clean_view):
     _require_columns(db, SCHEMA_NAME, TABLE_NAME, COLUMN_NAMES)
 
     view_query = f"CREATE MATERIALIZED VIEW {VIEW_NAME} AS SELECT * FROM {SCHEMA_NAME}.{TABLE_NAME} LIMIT 10"
-    index_query = f"CREATE INDEX {VIEW_NAME}_idx ON {VIEW_NAME} ({', '.join(COLUMN_NAMES)})"
+    index_query = (
+        f"CREATE INDEX {VIEW_NAME}_idx ON {VIEW_NAME} ({', '.join(COLUMN_NAMES)})"
+    )
     elapsed = db.create_view(VIEW_NAME, view_query, index_query)
     assert elapsed >= 0
 
     cursor = db.conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT matviewname FROM pg_matviews
         WHERE schemaname = %s AND matviewname = %s
-    """, (SCHEMA_NAME, VIEW_NAME))
+    """,
+        (SCHEMA_NAME, VIEW_NAME),
+    )
     result = cursor.fetchone()
     assert result is not None and result[0] == VIEW_NAME
     cursor.close()
+
 
 @pytest.mark.order(11)
 def test_drop_view(db):
@@ -249,24 +277,31 @@ def test_drop_view(db):
     db.drop_view(VIEW_NAME, materialized=True)
 
     cursor = db.conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT matviewname FROM pg_matviews
         WHERE schemaname = %s AND matviewname = %s
-    """, (SCHEMA_NAME, VIEW_NAME))
+    """,
+        (SCHEMA_NAME, VIEW_NAME),
+    )
     result = cursor.fetchone()
     assert result is None
     cursor.close()
+
 
 @pytest.mark.order(12)
 def test_get_arm_size(db, clean_index):
     _require_columns(db, SCHEMA_NAME, TABLE_NAME, COLUMN_NAMES)
 
-    elapsed = db.create_index(TABLE_NAME, COLUMN_NAMES, INDEX_NAME, include_cols=(), schema_name=SCHEMA_NAME)
+    elapsed = db.create_index(
+        TABLE_NAME, COLUMN_NAMES, INDEX_NAME, include_cols=(), schema_name=SCHEMA_NAME
+    )
     assert elapsed is not None and elapsed > 0
 
     full_index_name = f"{SCHEMA_NAME}.{INDEX_NAME}"
     size = db.get_arm_size(full_index_name)
     assert size > 0
+
 
 @pytest.mark.order(13)
 def test_get_arm_size_mv(db, clean_view):
@@ -279,12 +314,9 @@ def test_get_arm_size_mv(db, clean_view):
     size = db.get_arm_size_mv(full_view_name)
     assert size > 0
 
-import pytest
-from db_tools.postgres_db import PostgresDB
-from db_tools.qplan_pg.query_plan import QueryPlan
-from db_tools.qplan_pg.index_use import PgIndexRead, PgIndexWrite
 
 TEST_QUERY = "SELECT ss_item_sk FROM store_sales WHERE ss_item_sk = 100"
+
 
 @pytest.mark.order(14)
 def test_execute_query_v2(db):
@@ -304,6 +336,7 @@ def test_execute_query_v2(db):
         print("Elapsed Time:", iu.act_elapsed_max)
         print("Rows Output:", iu.act_rows_output)
 
+
 @pytest.mark.order(15)
 def test_hyp_create_index_v1(db):
     _require_columns(db, SCHEMA_NAME, TABLE_NAME, COLUMN_NAMES)
@@ -315,9 +348,9 @@ def test_hyp_create_index_v1(db):
         schema_name=SCHEMA_NAME,
         tbl_name=TABLE_NAME,
         col_names=COLUMN_NAMES,
-        idx_name='hyp_idx_test',
+        idx_name="hyp_idx_test",
         file=file,
-        include_cols=[]
+        include_cols=[],
     )
 
     assert elapsed is not None and elapsed > 0
@@ -328,16 +361,20 @@ def test_hyp_create_index_v1(db):
 
     ensure_connection(db)
     cursor = db.conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT indexname FROM pg_indexes 
         WHERE schemaname = %s AND tablename = %s AND indexname = %s
-    """, (SCHEMA_NAME, TABLE_NAME, 'hyp_idx_test'))
+    """,
+        (SCHEMA_NAME, TABLE_NAME, "hyp_idx_test"),
+    )
     result = cursor.fetchone()
-    assert result is None  
+    assert result is None
     cursor.close()
 
 
 INDEX_DEF = f"CREATE INDEX ON {SCHEMA_NAME}.{VIEW_NAME}({', '.join(COLUMN_NAMES)})"
+
 
 @pytest.mark.order(16)
 def test_hyp_create_view(db):
@@ -356,10 +393,7 @@ def test_hyp_create_view(db):
     file = io.StringIO()
 
     elapsed = db.hyp_create_view(
-        view_name=VIEW_NAME,
-        view_query=view_query,
-        index_def=INDEX_DEF,
-        file=file
+        view_name=VIEW_NAME, view_query=view_query, index_def=INDEX_DEF, file=file
     )
 
     print(file.getvalue())
@@ -439,10 +473,7 @@ def test_hyp_enable_index(db):
 
     # Step 1: Create view + hypothetical index
     elapsed = db.hyp_create_view(
-        view_name=VIEW_NAME,
-        view_query=view_query,
-        index_def=INDEX_DEF,
-        file=file
+        view_name=VIEW_NAME, view_query=view_query, index_def=INDEX_DEF, file=file
     )
 
     ensure_connection(db)
@@ -457,6 +488,7 @@ def test_hyp_enable_index(db):
     output = file_buffer.getvalue()
     assert f"CREATE INDEX ON {SCHEMA_NAME}.{VIEW_NAME}" in output
     assert "-- Hypothetical index on" in output
+
 
 # pytest tests/test_postgred_db.py -s
 
