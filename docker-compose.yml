@@ -3,8 +3,8 @@ version: '3.8'
 services:
   postgres:
     build:
-      context: ./dbtune_pg_mab_extension
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/postgres-with-extensions.Dockerfile
     shm_size: 2g
     environment:
       POSTGRES_USER: pguser
@@ -31,6 +31,19 @@ services:
       - redis
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  colse_api:
+    build: ./colse_service
+    ports:
+      - "5060:5060"
+    volumes:
+      - ./colse_service:/app
+    command: uvicorn app:app --host 0.0.0.0 --port 5060 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5060/health', timeout=2)\""]
       interval: 10s
       timeout: 5s
       retries: 10
