@@ -177,12 +177,24 @@ jobs:
             -p 55432:5432 \
             dbtune-pg-ext-ci
 
+          ready=0
           for _ in {1..60}; do
             if docker exec dbtune-pg-ci pg_isready -U pguser -d pgdb >/dev/null 2>&1; then
+              ready=1
               break
+            fi
+            if [[ "$(docker inspect -f '{{.State.Running}}' dbtune-pg-ci 2>/dev/null || echo false)" != "true" ]]; then
+              echo "PostgreSQL container exited before readiness." >&2
+              docker logs dbtune-pg-ci || true
+              exit 1
             fi
             sleep 2
           done
+          if [[ "$ready" -ne 1 ]]; then
+            echo "PostgreSQL readiness timed out." >&2
+            docker logs dbtune-pg-ci || true
+            exit 1
+          fi
 
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
