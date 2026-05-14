@@ -12,6 +12,8 @@
 
 - `dbtune_mab_service/`: tuning service layer built with FastAPI, Celery, and Redis.
 - `dbtune_pg_mab_extension/`: PostgreSQL C extension for experimental integration.
+- `colse_service/`: CoLSE estimator service API (current stub model for integration flow).
+- `dbtune_pg_colse_extension/`: PostgreSQL C extension bridge for CoLSE calls.
 - `docker-compose.yml`: one-command local stack for PostgreSQL, Redis, API, and worker.
 
 ## Quick Start (Docker)
@@ -27,6 +29,7 @@ docker compose up --build
 
 ```bash
 curl -s http://127.0.0.1:5050/health
+curl -s http://127.0.0.1:5060/health
 ```
 
 Expected:
@@ -34,6 +37,25 @@ Expected:
 ```json
 {"status":"ok"}
 ```
+
+## Enable hmab + CoLSE Together
+
+Run the following after the stack is up:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_mab;"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_colse;"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_tuning = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_enabled = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_service_url = 'http://mab_api:5050/mab/';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_service_url = 'http://colse_api:5060/colse/estimate';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf();"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_colse_estimate('select 1 as a');"
+```
+
+Expected:
+- `dbtune_mab_tuning` and `dbtune_colse_enabled` both show `on`.
+- `dbtune_colse_estimate(...)` returns JSON-like text containing `status":"ok"` when the CoLSE service is reachable.
 
 ### 3) Trigger a tuning request (example)
 
@@ -84,4 +106,3 @@ Notes:
 
 - Available: service orchestration, health endpoint, test baseline, and versioned release workflow.
 - In progress: deeper tuning algorithm integration, real workload validation, and expanded end-to-end verification.
-

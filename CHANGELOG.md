@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog, and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- Added CI coverage for CoLSE extension build (`make -C dbtune_pg_colse_extension clean all`).
+- Added CI Docker verification for the combined PostgreSQL image (`docker/postgres-with-extensions.Dockerfile`).
+- Added CI checks to create both `dbtune_mab` and `dbtune_colse` extensions in PostgreSQL.
+
+### Changed
+- Upgraded C-extension CI to validate both extension modules instead of only `dbtune_mab`.
+- Extended README with hmab + CoLSE dual-enable workflow and verification commands.
+
 ## [0.1.0] - 2026-05-11
 
 ### Added

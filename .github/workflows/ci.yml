@@ -91,7 +91,6 @@ jobs:
   c-extension:
     needs: prepare
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -139,17 +138,18 @@ jobs:
             echo "No changed C/C header files."
           fi
 
-      - name: Build PostgreSQL extension (PGXS)
+      - name: Build PostgreSQL extensions (PGXS)
         run: |
           set -euo pipefail
           which pg_config
           pg_config --version
           make -C dbtune_pg_mab_extension clean all PG_CONFIG="$(which pg_config)"
+          make -C dbtune_pg_colse_extension clean all PG_CONFIG="$(which pg_config)"
 
-      - name: Build postgres image with extension
-        run: docker build -t dbtune-pg-ext-ci ./dbtune_pg_mab_extension
+      - name: Build postgres image with extensions
+        run: docker build -t dbtune-pg-ext-ci -f docker/postgres-with-extensions.Dockerfile .
 
-      - name: Verify extension can be created in PostgreSQL
+      - name: Verify extensions can be created in PostgreSQL
         run: |
           set -euo pipefail
           docker rm -f dbtune-pg-ci >/dev/null 2>&1 || true
@@ -172,7 +172,31 @@ jobs:
             -c "CREATE EXTENSION IF NOT EXISTS dbtune_mab;"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION IF NOT EXISTS dbtune_colse;"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_mab';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_colse';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_mab_tuning = 'on';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_colse_enabled = 'on';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_mab_service_url = 'http://127.0.0.1:5050/mab/';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_colse_service_url = 'http://127.0.0.1:5060/colse/estimate';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT pg_reload_conf();"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT dbtune_colse_estimate('select 1 as a');"
 
       - name: Cleanup
         if: always()
