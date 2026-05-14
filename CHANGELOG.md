@@ -15,6 +15,20 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 - Upgraded C-extension CI to validate both extension modules instead of only `dbtune_mab`.
 - Extended README with hmab + CoLSE dual-enable workflow and verification commands.
 
+## [0.1.2] - 2026-05-14
+
+### Added
+- Added `colse_service/` FastAPI service scaffold for CoLSE estimate endpoint integration.
+- Added `dbtune_pg_colse_extension/` PostgreSQL C extension with query hook and `dbtune_colse_estimate(text)` bridge function.
+- Added `docker/postgres-with-extensions.Dockerfile` to build a PostgreSQL image that preloads both `dbtune_mab` and `dbtune_colse`.
+
+### Changed
+- Updated `docker-compose.yml` to build PostgreSQL from the combined extension image context.
+- Added `colse_api` service on port `5060` with health checks to the default compose stack.
+
+### Notes
+- CoLSE service behavior is currently a stub estimator for integration flow validation.
+
 ## [0.1.0] - 2026-05-11
 
 ### Added
