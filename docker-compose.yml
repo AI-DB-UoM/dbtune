@@ -48,6 +48,23 @@ services:
       timeout: 5s
       retries: 10
 
+  grasp_api:
+    build: ./grasp_service
+    ports:
+      - "5070:5070"
+    environment:
+      - GRASP_MODE=stub
+      - GRASP_EXTERNAL_ENDPOINT=
+      - GRASP_TIMEOUT_MS=1500
+    volumes:
+      - ./grasp_service:/app
+    command: uvicorn app:app --host 0.0.0.0 --port 5070 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5070/health', timeout=2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   mab_worker:
     build: ./dbtune_mab_service
     volumes:

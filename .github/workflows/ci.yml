@@ -59,7 +59,7 @@ jobs:
           pip install black ruff pytest
 
       - name: Python syntax check
-        run: python -m compileall dbtune_mab_service colse_service test scripts
+        run: python -m compileall dbtune_mab_service colse_service grasp_service test scripts
 
       - name: Python format and lint on changed files
         env:
@@ -163,6 +163,7 @@ jobs:
           pg_config --version
           make -C dbtune_pg_mab_extension clean all PG_CONFIG="$(which pg_config)"
           make -C dbtune_pg_colse_extension clean all PG_CONFIG="$(which pg_config)"
+          make -C dbtune_pg_grasp_extension clean all PG_CONFIG="$(which pg_config)"
 
       - name: Build postgres image with extensions
         run: docker build -t dbtune-pg-ext-ci -f docker/postgres-with-extensions.Dockerfile .
@@ -205,10 +206,16 @@ jobs:
             -c "CREATE EXTENSION IF NOT EXISTS dbtune_colse;"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION IF NOT EXISTS dbtune_grasp;"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_mab';"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_colse';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT extname FROM pg_extension WHERE extname = 'dbtune_grasp';"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "ALTER SYSTEM SET dbtune_mab_tuning = 'on';"
@@ -223,10 +230,19 @@ jobs:
             -c "ALTER SYSTEM SET dbtune_colse_service_url = 'http://127.0.0.1:5060/colse/estimate';"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_grasp_enabled = 'on';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET dbtune_grasp_service_url = 'http://127.0.0.1:5070/grasp/estimate';"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "SELECT pg_reload_conf();"
           docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
             psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
             -c "SELECT dbtune_colse_estimate('select 1 as a');"
+          docker exec -e PGPASSWORD=123456 dbtune-pg-ci \
+            psql -U pguser -d pgdb -v ON_ERROR_STOP=1 \
+            -c "SELECT dbtune_grasp_estimate('select 1 as a');"
 
       - name: Cleanup
         if: always()

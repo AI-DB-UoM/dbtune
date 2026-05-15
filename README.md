@@ -14,6 +14,8 @@
 - `dbtune_pg_mab_extension/`: PostgreSQL C extension for experimental integration.
 - `colse_service/`: CoLSE estimator service API (current stub model for integration flow).
 - `dbtune_pg_colse_extension/`: PostgreSQL C extension bridge for CoLSE calls.
+- `grasp_service/`: GrASP estimator service API (current stub model for integration flow).
+- `dbtune_pg_grasp_extension/`: PostgreSQL C extension bridge for GrASP calls.
 - `docker-compose.yml`: one-command local stack for PostgreSQL, Redis, API, and worker.
 
 ## Quick Start (Docker)
@@ -30,6 +32,7 @@ docker compose up --build
 ```bash
 curl -s http://127.0.0.1:5050/health
 curl -s http://127.0.0.1:5060/health
+curl -s http://127.0.0.1:5070/health
 ```
 
 Expected:
@@ -38,24 +41,53 @@ Expected:
 {"status":"ok"}
 ```
 
-## Enable hmab + CoLSE Together
+## Enable HMAB, CoLSE, and GrASP Together
 
 Run the following after the stack is up:
 
 ```bash
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_mab;"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_colse;"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_grasp;"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_tuning = 'on';"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_enabled = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_grasp_enabled = 'on';"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_service_url = 'http://mab_api:5050/mab/';"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_service_url = 'http://colse_api:5060/colse/estimate';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_grasp_service_url = 'http://grasp_api:5070/grasp/estimate';"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf();"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_colse_estimate('select 1 as a');"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_grasp_estimate('select 1 as a');"
 ```
 
-Expected:
-- `dbtune_mab_tuning` and `dbtune_colse_enabled` both show `on`.
+Expected results:
+- `dbtune_mab_tuning`, `dbtune_colse_enabled`, and `dbtune_grasp_enabled` are set to `on`.
 - `dbtune_colse_estimate(...)` returns JSON-like text containing `status":"ok"` when the CoLSE service is reachable.
+- `dbtune_grasp_estimate(...)` returns JSON-like text containing `status":"ok"` when the GrASP service is reachable.
+
+## GrASP Service Modes
+
+The GrASP service supports two modes:
+
+- `stub` mode: built-in lightweight estimator for integration testing.
+- `external` mode: forwards requests to a real GrASP-compatible endpoint.
+
+Environment variables:
+
+```bash
+GRASP_MODE=auto|stub|external
+GRASP_EXTERNAL_ENDPOINT=http://host:port/grasp/estimate
+GRASP_TIMEOUT_MS=1500
+```
+
+Default behavior:
+
+- `GRASP_MODE=auto` (default) uses `external` when `GRASP_EXTERNAL_ENDPOINT` is set; otherwise falls back to `stub`.
+
+Protocol helpers:
+
+- `GET /grasp/info`: returns current mode (`stub` or `external`).
+- `GET /grasp/protocol`: returns request/response field contract and compatibility keys.
 
 ### 3) Trigger a tuning request (example)
 
@@ -104,6 +136,6 @@ Notes:
 
 ## Project Status (v0.1.3)
 
-- Available: service orchestration, health endpoints (`5050` + `5060`), hmab + CoLSE dual extension integration, and versioned release workflow.
+- Available: service orchestration, health endpoints (`5050` + `5060` + `5070`), hmab + CoLSE + GrASP extension integration, and versioned release workflow.
 - Available: CI quality gates for Python/C plus PostgreSQL extension build and install verification.
-- In progress: replacing the CoLSE stub with full model integration and expanding real workload validation coverage.
+- In progress: replacing the CoLSE and GrASP stubs with full model integration and expanding real workload validation coverage.

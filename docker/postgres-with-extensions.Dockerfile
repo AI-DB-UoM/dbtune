@@ -6,8 +6,10 @@ RUN apt-get update && apt-get install -y \
 
 COPY dbtune_pg_mab_extension /plugin/dbtune_pg_mab_extension
 COPY dbtune_pg_colse_extension /plugin/dbtune_pg_colse_extension
+COPY dbtune_pg_grasp_extension /plugin/dbtune_pg_grasp_extension
 
 RUN make -C /plugin/dbtune_pg_mab_extension clean all && make -C /plugin/dbtune_pg_mab_extension install
 RUN make -C /plugin/dbtune_pg_colse_extension clean all && make -C /plugin/dbtune_pg_colse_extension install
+RUN make -C /plugin/dbtune_pg_grasp_extension clean all && make -C /plugin/dbtune_pg_grasp_extension install
 
-RUN echo "shared_preload_libraries = 'dbtune_mab,dbtune_colse'" >> /usr/share/postgresql/postgresql.conf.sample
+RUN echo "shared_preload_libraries = 'dbtune_mab,dbtune_colse,dbtune_grasp'" >> /usr/share/postgresql/postgresql.conf.sample

@@ -1,0 +1,4 @@
+comment = 'DBTune GrASP advisor for PostgreSQL'
+default_version = '0.0.1'
+module_pathname = '$libdir/dbtune_grasp'
+relocatable = false
