@@ -23,12 +23,16 @@ class ExternalGrASPEstimator(GrASPEstimator):
             resp = requests.post(self._endpoint, json=payload, timeout=self._timeout_s)
             resp.raise_for_status()
         except requests.RequestException as exc:
-            raise RuntimeError(f"external GrASP endpoint request failed: {exc}") from exc
+            raise RuntimeError(
+                f"external GrASP endpoint request failed: {exc}"
+            ) from exc
 
         try:
             parsed = resp.json()
         except json.JSONDecodeError as exc:
-            raise RuntimeError("external GrASP endpoint did not return valid JSON") from exc
+            raise RuntimeError(
+                "external GrASP endpoint did not return valid JSON"
+            ) from exc
 
         return self._parse_response(parsed)
 
