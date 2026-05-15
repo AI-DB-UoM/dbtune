@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-# Add parent directory to path
+# Add the parent directory to the import path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config_loader import ConfigLoader, get_tuning_config, load_config
@@ -96,4 +96,3 @@ def test_all_tuning_params():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
-

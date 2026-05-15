@@ -37,7 +37,7 @@ FROM hypopg_create_index(
   'CREATE INDEX ON public.movie_info_idx USING btree (info_type_id, movie_id);'
 );
 
--- 3) do trigram index for mc.note (only planner level)
+-- 3) Create a trigram index for mc.note (planner-level only)
 SELECT * 
 FROM hypopg_create_index(
   'CREATE INDEX ON public.movie_companies USING gin (note gin_trgm_ops);'

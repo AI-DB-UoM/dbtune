@@ -12,11 +12,11 @@ class TuneManager:
         self.tune_gap = tune_gap
         self.current_sql_index = 0
 
-    # TODO how to trigger tune
+    # TODO define the tuning trigger strategy
     # TODO 1. A simple threshold
-    # TODO 2. Query distribution has been changed
+    # TODO 2. The query distribution has changed
     # TODO 3. Data drift
-    # TODO 4. Model prediction gets different outputs
+    # TODO 4. Model predictions diverge over time
     def auto_tune(self, is_sql_useful):
 
         print(f"[auto_tune] {is_sql_useful} current index:{self.current_sql_index} total tune threshold:{self.tune_gap}")  # or use logging
