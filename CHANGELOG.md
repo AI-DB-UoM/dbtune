@@ -6,6 +6,8 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-16
+
 ### Added
 - Added `grasp_service/` FastAPI scaffold with `GET /health` and `POST /grasp/estimate`.
 - Added `dbtune_pg_grasp_extension/` PostgreSQL C extension bridge with `dbtune_grasp_estimate(text)`.
@@ -19,6 +21,7 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 - Updated shared preload libraries to load `dbtune_grasp` alongside existing modules.
 - Extended CI to compile and create the `dbtune_grasp` extension in PostgreSQL verification steps.
 - Upgraded `grasp_service` to support `stub` and `external` runtime modes through environment variables.
+- Updated the README with a research-lineage section that maps the MAB, CoLSE, and GrASP components to related publications and original public code bases where available.
 
 ## [0.1.3] - 2026-05-14
 
