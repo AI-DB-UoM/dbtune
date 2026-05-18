@@ -8,6 +8,52 @@
 - Support online evolution by continuously ingesting queries and triggering tuning logic.
 - Bridge research and engineering by validating MAB (multi-armed bandit) strategies with PostgreSQL extensions.
 
+## Research Lineage
+
+This repository is an integration-focused PostgreSQL prototype. It brings together several research threads from the DANAIS Lab and adapts them into a single extension-oriented stack.
+
+### MAB / HMAB Tuning Line
+
+- Related works:
+  - `ICDE 2021`: DBA bandits: Self-driving index tuning under ad-hoc, analytical workloads with safety guarantees
+  - `VLDB 2022`: HMAB: Self-Driving Hierarchy of Bandits for Integrated Physical Database Design Tuning
+  - `TKDE 2023`: No DBA? No regret! Multi-armed bandits for index tuning of analytical and HTAP workloads with provable guarantees
+  - `ICDM 2024`: Warm-Starting Contextual Bandits under Latent Reward Scaling
+  - `SIGMOD 2026`: AgentTune: An Agent-Based Large Language Model Framework for Database Knob Tuning
+- Original public code bases:
+  - `DBA Bandits`: https://github.com/malingaperera/DBABandits
+  - `HMAB`: https://github.com/malingaperera/HMAB
+- In this repository:
+  - `dbtune_mab_service/`
+  - `dbtune_pg_mab_extension/`
+
+### CoLSE Cardinality Estimation Line
+
+- Related works:
+  - `ICDE 2026`: CoLSE: A Lightweight and Robust Hybrid Learned Model for Single-Table Cardinality Estimation using Joint CDF
+  - `VLDB 2025`: Cardinality Estimation for Similarity Search on High-Dimensional Data Objects: The Impact of Reference Objects
+- Original code base:
+  - No public code link is listed on the DANAIS publications page for CoLSE at the time of writing.
+- In this repository:
+  - `colse_service/`
+  - `dbtune_pg_colse_extension/`
+
+### GrASP Semantic Prefetching Line
+
+- Related works:
+  - `VLDB 2024`: SeLeP: Learning Based Semantic Prefetching for Exploratory Database Workloads
+  - `ICDE 2026`: Generalizable Address-aware Semantic Prefetching for Scalable Transactional and Analytical Workloads
+- Original public code bases:
+  - `SeLeP`: https://github.com/fzirak/SeLeP
+  - No public code link is listed on the DANAIS publications page for the ICDE 2026 GrASP paper at the time of writing.
+- In this repository:
+  - `grasp_service/`
+  - `dbtune_pg_grasp_extension/`
+
+### Publication Index
+
+- DANAIS Lab publications page: https://danais-lab.com/
+
 ## Project Components
 
 - `dbtune_mab_service/`: tuning service layer built with FastAPI, Celery, and Redis.
@@ -17,6 +63,16 @@
 - `grasp_service/`: GrASP estimator service API (current stub model for integration flow).
 - `dbtune_pg_grasp_extension/`: PostgreSQL C extension bridge for GrASP calls.
 - `docker-compose.yml`: one-command local stack for PostgreSQL, Redis, API, and worker.
+
+## Service Independence (Important)
+
+`dbtune_mab`, `dbtune_colse`, and `dbtune_grasp` are independent services/modules in this repository.
+
+- They can be enabled at the same time.
+- They do not form an automatic end-to-end pipeline by default.
+- `GrASP` does **not** return cardinality estimates in the current interface; cardinality is provided by `CoLSE`.
+
+Detailed runbook: [`docs/independent-services-runbook.md`](docs/independent-services-runbook.md)
 
 ## Quick Start (Docker)
 
@@ -41,7 +97,7 @@ Expected:
 {"status":"ok"}
 ```
 
-## Enable HMAB, CoLSE, and GrASP Together
+## Enable HMAB, CoLSE, and GrASP (Independent, Can Run Together)
 
 Run the following after the stack is up:
 
@@ -119,7 +175,7 @@ Notes:
 
 ## Versioning and Release Policy
 
-- Current project version is tracked in `VERSION` (current: `0.1.3`).
+- Current project version is tracked in `VERSION` (current: `0.1.4`).
 - Semantic Versioning (SemVer):
   - `MAJOR`: incompatible changes
   - `MINOR`: backward-compatible features
@@ -134,7 +190,7 @@ Notes:
 - See [CHANGELOG.md](CHANGELOG.md) for release-by-release changes.
 - Prefer small, verifiable increments for each version to keep rollbacks easy.
 
-## Project Status (v0.1.3)
+## Project Status (v0.1.4)
 
 - Available: service orchestration, health endpoints (`5050` + `5060` + `5070`), hmab + CoLSE + GrASP extension integration, and versioned release workflow.
 - Available: CI quality gates for Python/C plus PostgreSQL extension build and install verification.
