@@ -121,31 +121,33 @@ Expected results:
 - `dbtune_colse_estimate(...)` returns JSON-like text containing `status":"ok"` when the CoLSE service is reachable.
 - `dbtune_grasp_estimate(...)` returns JSON-like text containing `status":"ok"` when the GrASP service is reachable.
 
-## GrASP Service Modes
+## How to Use HMAB, CoLSE, and GrASP (Detailed)
 
-The GrASP service supports two modes:
+### HMAB (MAB) usage
 
-- `stub` mode: built-in lightweight estimator for integration testing.
-- `external` mode: forwards requests to a real GrASP-compatible endpoint.
+Use this path when you want to ingest many workload queries and request index recommendations.
 
-Environment variables:
+1. Feed many queries through PostgreSQL:
 
 ```bash
-GRASP_MODE=auto|stub|external
-GRASP_EXTERNAL_ENDPOINT=http://host:port/grasp/estimate
-GRASP_TIMEOUT_MS=1500
+psql "host=127.0.0.1 port=5438 dbname=pgdb user=pguser password=123456" -f ./dbtune_mab_service/workloads/test_workload.sql
 ```
 
-Default behavior:
+2. Confirm queries are collected in Redis:
 
-- `GRASP_MODE=auto` (default) uses `external` when `GRASP_EXTERNAL_ENDPOINT` is set; otherwise falls back to `stub`.
+```bash
+docker exec aidb-redis-1 redis-cli LLEN sql_queue
+docker exec aidb-redis-1 redis-cli LRANGE sql_queue 0 9
+docker exec aidb-redis-1 redis-cli HGETALL sql:<hash>
+```
 
-Protocol helpers:
+3. Trigger a manual suggestion from PostgreSQL:
 
-- `GET /grasp/info`: returns current mode (`stub` or `external`).
-- `GET /grasp/protocol`: returns request/response field contract and compatibility keys.
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_mab_tune('users', ARRAY['age','income']);"
+```
 
-### 3) Trigger a tuning request (example)
+4. Optional API trigger (service endpoint):
 
 ```bash
 curl -s -X POST http://127.0.0.1:5050/mab/tune_async \
@@ -158,6 +160,95 @@ curl -s -X POST http://127.0.0.1:5050/mab/tune_async \
       "config_file": "/app/test_inputs/config.yaml"
     }
   }'
+```
+
+Notes:
+- In the current integration stage, the MAB suggestion response is placeholder-style text.
+- Workload capture and trigger plumbing are available; production-grade end-to-end tuning logic is still evolving.
+
+### CoLSE usage (cardinality estimation)
+
+Use this path when you need cardinality estimates.
+
+1. Basic estimate call:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_colse_estimate('select 1 as a');"
+```
+
+2. Extract numeric cardinality from JSON text:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT (dbtune_colse_estimate('select 1 as a')::jsonb ->> 'cardinality_estimate')::float AS cardinality;"
+```
+
+3. Batch style example from SQL:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "WITH q(sql) AS (VALUES ('select 1 as a'), ('select * from pg_class')) SELECT sql, (dbtune_colse_estimate(sql)::jsonb ->> 'cardinality_estimate')::float AS cardinality FROM q;"
+```
+
+### GrASP usage (semantic prefetch)
+
+Use this path when you need a prefetch plan and confidence score.
+
+Important:
+- GrASP currently does not return cardinality.
+- Cardinality comes from CoLSE.
+
+1. Basic estimate call:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_grasp_estimate('select 1 as a');"
+```
+
+2. Extract prefetch plan and confidence:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_grasp_estimate('select 1 as a')::jsonb -> 'prefetch_plan' AS prefetch_plan, (dbtune_grasp_estimate('select 1 as a')::jsonb ->> 'confidence')::float AS confidence;"
+```
+
+### GrASP service modes
+
+The GrASP service supports two runtime modes:
+- `stub`: built-in lightweight estimator for integration testing.
+- `external`: forwards requests to a real GrASP-compatible endpoint.
+
+Environment variables:
+
+```bash
+GRASP_MODE=auto|stub|external
+GRASP_EXTERNAL_ENDPOINT=http://host:port/grasp/estimate
+GRASP_TIMEOUT_MS=1500
+```
+
+Default behavior:
+- `GRASP_MODE=auto` uses `external` when `GRASP_EXTERNAL_ENDPOINT` is set, otherwise falls back to `stub`.
+
+Protocol helpers:
+- `GET /grasp/info` returns current mode (`stub` or `external`).
+- `GET /grasp/protocol` returns request/response contract and compatibility keys.
+
+Enable external mode example:
+
+1. Update `docker-compose.yml` under `grasp_api.environment`:
+
+```bash
+GRASP_MODE=external
+GRASP_EXTERNAL_ENDPOINT=http://<your-grasp-endpoint>/grasp/estimate
+GRASP_TIMEOUT_MS=1500
+```
+
+2. Recreate the GrASP service:
+
+```bash
+docker compose up -d --build grasp_api
+```
+
+3. Verify mode:
+
+```bash
+curl -s http://127.0.0.1:5070/grasp/info
 ```
 
 ## Local Development
