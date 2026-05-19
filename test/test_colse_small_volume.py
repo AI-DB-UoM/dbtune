@@ -44,6 +44,17 @@ def _psql(sql: str, tuples_only: bool = True) -> str:
     return out.stdout.strip()
 
 
+def _explain_plan_rows(sql: str) -> float:
+    payload = _psql(f"EXPLAIN (FORMAT JSON) {sql}")
+    parsed = json.loads(payload)
+    return float(parsed[0]["Plan"]["Plan Rows"])
+
+
+def _supports_colse_enabled_guc() -> bool:
+    probe = _psql("SELECT current_setting('dbtune.colse_enabled', true) IS NOT NULL;")
+    return probe.strip().lower() == "t"
+
+
 @pytest.mark.integration
 def test_colse_small_volume_cardinality_feedback():
     if not _docker_ready():
@@ -53,9 +64,14 @@ def test_colse_small_volume_cardinality_feedback():
 
     # Ensure extension + runtime flags are enabled.
     _psql("CREATE EXTENSION IF NOT EXISTS dbtune_colse;", tuples_only=False)
-    _psql("ALTER SYSTEM SET dbtune_colse_enabled = 'on';", tuples_only=False)
+    if not _supports_colse_enabled_guc():
+        pytest.skip(
+            "dbtune.colse_enabled is unavailable in the running PostgreSQL image; rebuild/restart the extension image first"
+        )
+
+    _psql("ALTER SYSTEM SET dbtune.colse_enabled = 'on';", tuples_only=False)
     _psql(
-        "ALTER SYSTEM SET dbtune_colse_service_url = 'http://colse_api:5060/colse/estimate';",
+        "ALTER SYSTEM SET dbtune.colse_service_url = 'http://colse_api:5060/colse/estimate';",
         tuples_only=False,
     )
     _psql("SELECT pg_reload_conf();", tuples_only=False)
@@ -109,6 +125,47 @@ def test_colse_small_volume_cardinality_feedback():
             )
         )
 
+    # Validate planner replacement modes for a simple single-table query.
+    plan_query = test_queries[1]
+
+    estimate_payload = _psql(f"SELECT dbtune_colse_estimate($${plan_query}$$);")
+    estimate = float(json.loads(estimate_payload)["cardinality_estimate"])
+
+    _psql("ALTER SYSTEM SET dbtune.colse_enabled = 'off';", tuples_only=False)
+    _psql("SELECT pg_reload_conf();", tuples_only=False)
+    native_rows = _explain_plan_rows(plan_query)
+
+    _psql("ALTER SYSTEM SET dbtune.colse_enabled = 'on';", tuples_only=False)
+    _psql(
+        "ALTER SYSTEM SET dbtune.colse_service_url = 'http://colse_api:5060/colse/estimate';",
+        tuples_only=False,
+    )
+    _psql("SELECT pg_reload_conf();", tuples_only=False)
+    replaced_rows = _explain_plan_rows(plan_query)
+
+    assert (
+        abs(replaced_rows - estimate) <= 1.0
+    ), f"planner rows should follow CoLSE estimate (rows={replaced_rows}, estimate={estimate})"
+
+    # Fail-open: if CoLSE endpoint is unreachable, planner should keep PG native estimate.
+    _psql(
+        "ALTER SYSTEM SET dbtune.colse_service_url = 'http://127.0.0.1:9/colse/estimate';",
+        tuples_only=False,
+    )
+    _psql("SELECT pg_reload_conf();", tuples_only=False)
+    failopen_rows = _explain_plan_rows(plan_query)
+    assert (
+        failopen_rows == native_rows
+    ), f"planner should fall back to native estimate on CoLSE failure ({failopen_rows} vs {native_rows})"
+
     print("\n[CoLSE small-volume feedback]")
     for row in feedback_rows:
         print(row)
+    print("\n[CoLSE planner replacement]")
+    print(
+        f"query={plan_query}\n"
+        f"  native_rows={native_rows:.3f}\n"
+        f"  colse_estimate={estimate:.3f}\n"
+        f"  replaced_rows={replaced_rows:.3f}\n"
+        f"  failopen_rows={failopen_rows:.3f}"
+    )

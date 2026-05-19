@@ -192,11 +192,11 @@ void _PG_init(void) {
     //                            &mab_service_url, "http://mab_api:5050/mab/tune_async", PGC_SUSET, 0, NULL, NULL, NULL);
     // DefineCustomBoolVariable("dbtune_mab_tuning", "Enable MAB tuning globally", NULL,                         
     //                             &dbtune_mab_tuning, false, PGC_SIGHUP, 0,NULL, NULL, NULL);
-    // DefineCustomStringVariable("dbtune_mab_service_url", "MAB service URL.", NULL,
+    // DefineCustomStringVariable("dbtune.mab_service_url", "MAB service URL.", NULL,
     //                             &mab_service_url, "http://mab_api:5050/mab/", PGC_SIGHUP, 0, NULL, NULL, NULL);
 
     DefineCustomBoolVariable(
-        "dbtune_mab_tuning",
+        "dbtune.mab_tuning",
         "Enable MAB tuning.",
         NULL,
         &dbtune_mab_tuning,
@@ -206,7 +206,7 @@ void _PG_init(void) {
         NULL, NULL, NULL);
     
     DefineCustomBoolVariable(
-        "dbtune_fsd",
+        "dbtune.fsd",
         "Enable MAB tuning Full self-driving.",
         NULL,
         &dbtune_fsd,
@@ -216,7 +216,7 @@ void _PG_init(void) {
         NULL, NULL, NULL);
 
     DefineCustomStringVariable(
-        "dbtune_mab_service_url",
+        "dbtune.mab_service_url",
         "The URL of the MAB tuning service.",
         NULL,
         &mab_service_url,
@@ -427,7 +427,7 @@ static char *poll_until_done(const char *task_id) {
 
 Datum dbtune_mab_tune(PG_FUNCTION_ARGS) {
     if (!dbtune_mab_tuning)
-        ereport(ERROR, (errmsg("DBTune MAB is disabled. Enable with: SET dbtune_mab_tuning = true;")));
+        ereport(ERROR, (errmsg("DBTune MAB is disabled. Enable with: SET dbtune.mab_tuning = true;")));
 
     CURL *curl;
     struct curl_string response;

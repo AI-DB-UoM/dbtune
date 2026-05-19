@@ -105,21 +105,25 @@ Run the following after the stack is up:
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_mab;"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_colse;"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS dbtune_grasp;"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_tuning = 'on';"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_enabled = 'on';"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_grasp_enabled = 'on';"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_mab_service_url = 'http://mab_api:5050/mab/';"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_colse_service_url = 'http://colse_api:5060/colse/estimate';"
-docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune_grasp_service_url = 'http://grasp_api:5070/grasp/estimate';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.mab_tuning = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.colse_enabled = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.grasp_enabled = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.mab_service_url = 'http://mab_api:5050/mab/';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.colse_service_url = 'http://colse_api:5060/colse/estimate';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.grasp_service_url = 'http://grasp_api:5070/grasp/estimate';"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf();"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_colse_estimate('select 1 as a');"
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT dbtune_grasp_estimate('select 1 as a');"
 ```
 
 Expected results:
-- `dbtune_mab_tuning`, `dbtune_colse_enabled`, and `dbtune_grasp_enabled` are set to `on`.
+- `dbtune.mab_tuning`, `dbtune.colse_enabled`, and `dbtune.grasp_enabled` are set to `on`.
 - `dbtune_colse_estimate(...)` returns JSON-like text containing `status":"ok"` when the CoLSE service is reachable.
 - `dbtune_grasp_estimate(...)` returns JSON-like text containing `status":"ok"` when the GrASP service is reachable.
+
+Important:
+- Use only dotted DBTune GUC names (`dbtune.*`) in `ALTER SYSTEM`.
+- Legacy underscore names (`dbtune_*`) can break PostgreSQL restart if they remain in `postgresql.auto.conf`.
 
 ## How to Use HMAB, CoLSE, and GrASP (Detailed)
 
@@ -187,6 +191,31 @@ docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT
 ```bash
 docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "WITH q(sql) AS (VALUES ('select 1 as a'), ('select * from pg_class')) SELECT sql, (dbtune_colse_estimate(sql)::jsonb ->> 'cardinality_estimate')::float AS cardinality FROM q;"
 ```
+
+4. Planner replacement for eligible single-table `SELECT` queries:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET dbtune.colse_enabled = 'on';"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf();"
+```
+
+5. Verify replacement with `EXPLAIN`:
+
+```bash
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "EXPLAIN (FORMAT JSON) SELECT * FROM colse_users WHERE age BETWEEN 25 AND 40 AND city_group IN (1,2,3);"
+docker exec aidb-postgres-1 psql -U pguser -d pgdb -v ON_ERROR_STOP=1 -c "SELECT (dbtune_colse_estimate('SELECT * FROM colse_users WHERE age BETWEEN 25 AND 40 AND city_group IN (1,2,3)')::jsonb ->> 'cardinality_estimate')::float;"
+```
+
+How replacement works in PostgreSQL:
+- `dbtune_colse` registers `set_rel_pathlist_hook` in the planner.
+- When `dbtune.colse_enabled='on'`, eligible single-table `SELECT` relations are intercepted during planning.
+- The extension calls CoLSE (`dbtune.colse_service_url`) and reads `cardinality_estimate` from the response.
+- The planner row estimates are overridden (`rel->rows` and path `rows`) before PostgreSQL cost-based path selection continues.
+- If CoLSE is unavailable or returns an invalid payload, replacement is skipped and PostgreSQL keeps native estimates (fail-open).
+
+Notes:
+- Current replacement scope is intentionally narrow in v1: single-table `SELECT` only.
+- If CoLSE call fails or times out, planner estimate falls back to native PostgreSQL behavior.
 
 ### GrASP usage (semantic prefetch)
 

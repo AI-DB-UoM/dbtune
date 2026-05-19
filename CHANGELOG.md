@@ -6,6 +6,15 @@ The format is inspired by Keep a Changelog, and this project follows Semantic Ve
 
 ## [Unreleased]
 
+### Added
+- Added planner-stage CoLSE replacement for eligible single-table `SELECT` queries.
+
+### Changed
+- Updated CoLSE integration testing to validate replacement-off, replacement-on, and fail-open fallback behaviors.
+- Updated README CoLSE runbook with planner replacement enablement and `EXPLAIN` verification flow.
+- Migrated extension GUC names from `dbtune_*` to dotted `dbtune.*` names for restart-safe `ALTER SYSTEM` behavior.
+- Simplified CoLSE control semantics so `dbtune.colse_enabled=on` activates planner replacement.
+
 ## [0.1.4] - 2026-05-16
 
 ### Added

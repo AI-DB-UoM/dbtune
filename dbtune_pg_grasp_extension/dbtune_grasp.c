@@ -172,16 +172,16 @@ void _PG_fini(void);
 PG_FUNCTION_INFO_V1(dbtune_grasp_estimate);
 
 void _PG_init(void) {
-  DefineCustomBoolVariable("dbtune_grasp_enabled", "Enable GrASP bridge.", NULL,
+  DefineCustomBoolVariable("dbtune.grasp_enabled", "Enable GrASP bridge.", NULL,
                            &dbtune_grasp_enabled, true, PGC_SIGHUP, 0, NULL,
                            NULL, NULL);
 
   DefineCustomStringVariable(
-      "dbtune_grasp_service_url", "The GrASP estimate service URL.", NULL,
+      "dbtune.grasp_service_url", "The GrASP estimate service URL.", NULL,
       &grasp_service_url, "http://grasp_api:5070/grasp/estimate", PGC_SIGHUP, 0,
       NULL, NULL, NULL);
 
-  DefineCustomIntVariable("dbtune_grasp_timeout_ms",
+  DefineCustomIntVariable("dbtune.grasp_timeout_ms",
                           "HTTP timeout for GrASP bridge in milliseconds.",
                           NULL, &grasp_timeout_ms, 1500, 100, 60000, PGC_SIGHUP,
                           0, NULL, NULL, NULL);
