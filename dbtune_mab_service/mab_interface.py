@@ -25,15 +25,19 @@ def _to_create_index_sql(arm) -> str:
     return sql + ";"
 
 
-def suggest_index(table: str, columns: list[str], config: dict, query: list[str]) -> str:
+def suggest_index(
+    table: str, columns: list[str], config: dict, query: list[str]
+) -> str:
     recommendation_arms = tune_via_MAB(table, columns, config, query)
     if not recommendation_arms:
-        raise ValueError("No index recommendation could be generated from the current workload.")
+        raise ValueError(
+            "No index recommendation could be generated from the current workload."
+        )
     return _to_create_index_sql(recommendation_arms[0])
 
 
 def tune_via_MAB(table, columns, config, query):
-    print(f"[DEBUG] --------------tune_via_MAB--------------")
+    print("[DEBUG] --------------tune_via_MAB--------------")
 
     if not table:
         raise ValueError("table is required")

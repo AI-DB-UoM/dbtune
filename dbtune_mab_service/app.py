@@ -5,32 +5,30 @@ from celery import Celery
 import redis
 from fastapi import FastAPI, HTTPException
 from mab_interface import suggest_index
-from celery_worker import run_mab_task
 from redis_manager import RedisManager
 from tune_manager import TuneManager
 from sql_queue.receiver import SQLReceiver
 
 app = FastAPI()
 
-r = redis.Redis(host="redis", port=6379, db=0) # TODO use redis_mgr
+r = redis.Redis(host="redis", port=6379, db=0)  # TODO use redis_mgr
 
 redis_mgr = RedisManager.get_instance(host="redis", port=6379, db=0)
 receiver = SQLReceiver(redis_mgr)
 tune_mgr = TuneManager(redis_mgr)
 
-celery = Celery(
-    "mab",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/0" 
-)
+celery = Celery("mab", broker="redis://redis:6379/0", backend="redis://redis:6379/0")
+
 
 class MABRequest(BaseModel):
     table: str
     columns: list[str]
     options: dict = {}
 
+
 class MABQueryRequest(BaseModel):
-    query: str | None = None 
+    query: str | None = None
+
 
 class MABResponse(BaseModel):
     status: str
@@ -67,13 +65,17 @@ def _infer_from_recent_sql() -> tuple[str, list[str], list[str]] | None:
     return None
 
 
-def _recommend_with_existing_mab(table: str, columns: list[str], query_pool: list[str]) -> str:
+def _recommend_with_existing_mab(
+    table: str, columns: list[str], query_pool: list[str]
+) -> str:
     # Use the existing MAB interface path instead of constructing SQL in API layer.
     return suggest_index(table=table, columns=columns, config={}, query=query_pool)
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.post("/mab/tune_async")
 def mab_tune_async(req: MABRequest):
@@ -84,6 +86,7 @@ def mab_tune_async(req: MABRequest):
     return {"task_id": "this_is_the_task_id"}  # Dummy ID to simulate success
     # task = run_mab_task.delay(req.dict())
     # return {"task_id": task.id}
+
 
 @app.post("/mab/query")
 def mab_tune_query(req: MABQueryRequest):
@@ -121,7 +124,9 @@ def dbtune_mab_tune(req: MABQueryRequest):
     parsed = _parse_tune_call(req.query)
     if parsed:
         table, columns = parsed
-        return {"suggestion": _recommend_with_existing_mab(table, columns, recent_queries)}
+        return {
+            "suggestion": _recommend_with_existing_mab(table, columns, recent_queries)
+        }
 
     if sql_lower == "select dbtune_mab_tune();":
         print("Triger MAB tuning")
@@ -140,9 +145,7 @@ def dbtune_mab_tune(req: MABQueryRequest):
     if inferred:
         table, columns, inferred_queries = inferred
         return {
-            "suggestion": _recommend_with_existing_mab(
-                table, columns, inferred_queries
-            )
+            "suggestion": _recommend_with_existing_mab(table, columns, inferred_queries)
         }
 
     raise HTTPException(

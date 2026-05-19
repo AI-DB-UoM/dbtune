@@ -112,4 +112,3 @@ def test_colse_small_volume_cardinality_feedback():
     print("\n[CoLSE small-volume feedback]")
     for row in feedback_rows:
         print(row)
-

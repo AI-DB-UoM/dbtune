@@ -124,9 +124,7 @@ def test_hmab_and_colse_smoke_outputs():
         """,
         tuples_only=False,
     )
-    colse_query = (
-        "SELECT * FROM colse_users WHERE age BETWEEN 25 AND 40 AND city_group IN (1,2,3)"
-    )
+    colse_query = "SELECT * FROM colse_users WHERE age BETWEEN 25 AND 40 AND city_group IN (1,2,3)"
     estimate_payload = _psql(f"SELECT dbtune_colse_estimate($${colse_query}$$);")
     parsed = json.loads(estimate_payload)
     assert parsed.get("status") == "ok"

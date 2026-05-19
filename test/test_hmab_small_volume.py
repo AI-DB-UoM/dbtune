@@ -112,12 +112,9 @@ def test_hmab_small_volume_workflow():
     )
 
     # Request a recommendation from the HMAB extension entrypoint.
-    suggestion = _psql(
-        "SELECT dbtune_mab_tune('hmab_users', ARRAY['age', 'income']);"
-    )
+    suggestion = _psql("SELECT dbtune_mab_tune('hmab_users', ARRAY['age', 'income']);")
     suggestion_upper = suggestion.upper()
     assert "CREATE INDEX" in suggestion_upper, (
         "HMAB recommendation response did not include an index statement. "
         f"response={suggestion}"
     )
-
