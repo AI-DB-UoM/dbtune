@@ -33,7 +33,7 @@ This repository is an integration-focused PostgreSQL prototype. It brings togeth
   - `ICDE 2026`: CoLSE: A Lightweight and Robust Hybrid Learned Model for Single-Table Cardinality Estimation using Joint CDF
   - `VLDB 2025`: Cardinality Estimation for Similarity Search on High-Dimensional Data Objects: The Impact of Reference Objects
 - Original code base:
-  - No public code link is listed on the DANAIS publications page for CoLSE at the time of writing.
+  - `CoLSE`: https://github.com/AI-DB-UoM/CoLSE
 - In this repository:
   - `colse_service/`
   - `dbtune_pg_colse_extension/`
@@ -45,7 +45,7 @@ This repository is an integration-focused PostgreSQL prototype. It brings togeth
   - `ICDE 2026`: Generalizable Address-aware Semantic Prefetching for Scalable Transactional and Analytical Workloads
 - Original public code bases:
   - `SeLeP`: https://github.com/fzirak/SeLeP
-  - No public code link is listed on the DANAIS publications page for the ICDE 2026 GrASP paper at the time of writing.
+  - `GrASP`: https://github.com/AI-DB-UoM/GrASP
 - In this repository:
   - `grasp_service/`
   - `dbtune_pg_grasp_extension/`
