@@ -67,6 +67,7 @@ class BanditTuner:
         self.with_mv = system_config['with_mv']
         self.mv = system_config['mv']
         constants.max_memory = system_config['max_memory']
+        constants.SMALL_TABLE_IGNORE = get_small_table_threshold()
         self.max_memory = constants.max_memory
         
         # Load bandit configuration
@@ -99,6 +100,12 @@ class BanditTuner:
         self.queries_start = tuning_config['queries_start']
         self.batch_size = tuning_config['batch_size']
         self.offset = tuning_config['offset']
+
+    def _default_schema_from_db(self):
+        schema = {}
+        for table_name, table in self.tables.items():
+            schema[table_name] = set(table.get_columns().keys())
+        return schema
 
     def _create_bandits_for_tables(self):
         # Creating bandits for tables
@@ -140,8 +147,9 @@ class BanditTuner:
             return
             # raw_queries = QueryLoader.load_from_sql(filepath)
 
+        parser_schema = schema or self._default_schema_from_db()
         self.query_properties = [
-            SQLStructureParser(q, i, schema).to_dict()
+            SQLStructureParser(q, i, parser_schema).to_dict()
             for i, q in enumerate(raw_queries)
         ]
 
@@ -149,7 +157,7 @@ class BanditTuner:
         self.queries = []
 
         for i, query in enumerate(raw_queries):
-            parsed = SQLStructureParser(query, i, schema).to_dict()
+            parsed = SQLStructureParser(query, i, parser_schema).to_dict()
             query_obj = Query(
                 query_id=i,
                 query_string=query,
@@ -165,6 +173,96 @@ class BanditTuner:
         ]
 
         self.all_columns, self.number_of_columns = self.db.get_all_columns()
+
+    def recommend_index_arms(
+        self,
+        raw_queries: list[str],
+        target_table: str,
+        top_k: int = 3,
+        preferred_columns: list[str] | None = None,
+    ):
+        if not target_table:
+            return []
+
+        # Refresh metadata because workload tests create/drop tables dynamically.
+        self.db.tables = {}
+        self.tables = self.db.get_tables()
+
+        self.init_queries(raw_queries)
+        if not self.queries:
+            return []
+        if target_table not in self.tables:
+            return []
+
+        self.bandits_dict = {}
+        self.columns = {}
+        self.column_counts = {}
+        self.cluster_id = 1
+
+        if target_table not in self.candidate_tables:
+            self.candidate_tables.append(target_table)
+
+        self._create_bandits_for_tables()
+        if target_table not in self.bandits_dict:
+            return []
+
+        index_arms_for_table = {}
+        for query_obj in self.queries:
+            bandit_arms_tmp = bandit_helper.gen_arms_from_predicates_v2(self.db, query_obj)
+            for key, index_arm in bandit_arms_tmp.items():
+                if index_arm.table_name != target_table:
+                    continue
+                if key not in index_arms_for_table:
+                    index_arm.query_ids = set()
+                    index_arm.query_ids_backup = set()
+                    index_arm.clustered_index_time = 1
+                    index_arms_for_table[key] = index_arm
+                index_arms_for_table[key].query_ids.add(index_arm.query_id)
+                index_arms_for_table[key].query_ids_backup.add(index_arm.query_id)
+
+        if not index_arms_for_table:
+            return []
+
+        index_arm_list = list(index_arms_for_table.values())
+        self.bandits_dict[target_table].set_arms(index_arm_list)
+
+        context_vectors_v1 = bandit_helper.get_name_encode_cv_v2(
+            index_arms_for_table,
+            self.columns[target_table],
+            self.column_counts[target_table],
+            constants.CONTEXT_UNIQUENESS,
+            constants.CONTEXT_INCLUDES,
+        )
+        context_vectors_v2 = bandit_helper.get_derived_value_cv_v4(
+            self.db,
+            index_arms_for_table,
+            self.queries,
+            {},
+            constants.INDEX_INCLUDES,
+        )
+
+        context_vectors = []
+        for i in range(len(context_vectors_v1)):
+            context_vectors.append(
+                numpy.array(list(context_vectors_v2[i]) + list(context_vectors_v1[i]), ndmin=2)
+            )
+
+        chosen = self.bandits_dict[target_table].select_arm(context_vectors, 0)
+        ranked = sorted(chosen, key=lambda x: x[1], reverse=True)
+        selected = [index_arm_list[arm_id] for arm_id, _ in ranked[:top_k]]
+        if selected:
+            return selected
+
+        pref = set((preferred_columns or []))
+        arm_sorted = sorted(
+            index_arm_list,
+            key=lambda a: (
+                -sum(1 for c in a.index_cols if c in pref),
+                len(a.index_cols),
+                a.memory,
+            ),
+        )
+        return arm_sorted[:top_k]
 
     def train_MAB_via_dead_loop(self):
 

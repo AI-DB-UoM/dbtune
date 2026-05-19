@@ -259,6 +259,19 @@ curl -s http://127.0.0.1:5070/grasp/info
 pytest -q
 ```
 
+Recommended integration checks for HMAB + CoLSE:
+
+```bash
+# Combined smoke test with explicit output
+pytest -q -s test/test_hmab_colse_smoke.py
+
+# Small-volume HMAB workflow
+pytest -q -s test/test_hmab_small_volume.py
+
+# Small-volume CoLSE cardinality feedback
+pytest -q -s test/test_colse_small_volume.py
+```
+
 Notes:
 
 - Integration tests are skipped when external dependencies (PostgreSQL/Redis/services) are unavailable.

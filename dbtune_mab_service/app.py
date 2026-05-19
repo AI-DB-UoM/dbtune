@@ -1,4 +1,4 @@
-
+import re
 from pydantic import BaseModel
 from celery.result import AsyncResult
 from celery import Celery
@@ -36,6 +36,40 @@ class MABResponse(BaseModel):
     status: str
     suggestion: str
     task_id: str
+
+
+def _parse_tune_call(query: str) -> tuple[str, list[str]] | None:
+    # Example: SELECT dbtune_mab_tune('hmab_users', ARRAY['age','income']);
+    pattern = r"dbtune_mab_tune\s*\(\s*'([^']+)'\s*,\s*array\s*\[(.*?)\]\s*\)"
+    match = re.search(pattern, query, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+
+    table = match.group(1).strip()
+    cols_raw = match.group(2)
+    columns = [c.strip().strip('"').strip("'") for c in cols_raw.split(",")]
+    columns = [c for c in columns if c]
+    return table, columns
+
+
+def _infer_from_recent_sql() -> tuple[str, list[str], list[str]] | None:
+    sqls = tune_mgr.loader.load_top_hit_count(limit=100)
+    recent_queries = []
+    for entry in sqls:
+        sql = entry.get("sql", "").strip()
+        if not sql:
+            continue
+        recent_queries.append(sql)
+        parsed = _parse_tune_call(sql)
+        if parsed:
+            table, columns = parsed
+            return table, columns, recent_queries
+    return None
+
+
+def _recommend_with_existing_mab(table: str, columns: list[str], query_pool: list[str]) -> str:
+    # Use the existing MAB interface path instead of constructing SQL in API layer.
+    return suggest_index(table=table, columns=columns, config={}, query=query_pool)
 
 @app.get("/health")
 def health():
@@ -77,12 +111,47 @@ def dbtune_mab_tune(req: MABQueryRequest):
     if not req.query:
         raise HTTPException(status_code=400, detail="query is required")
 
-    if req.query.lower() == "select dbtune_mab_tune();":
-        print("Triger MAB tuning")
-        receiver.receive(req.query.lower())
-        tune_mgr.immediate_tune()
+    sql_lower = req.query.lower().strip()
+    recent_queries = [
+        entry.get("sql", "").strip()
+        for entry in tune_mgr.loader.load_top_hit_count(limit=100)
+        if entry.get("sql", "").strip()
+    ]
 
-    return {"suggestion": "CREATE INDEX [IF NOT EXISTS] index_name ON table_name(column1, column2, ...);"}  # Dummy ID to simulate success
+    parsed = _parse_tune_call(req.query)
+    if parsed:
+        table, columns = parsed
+        return {"suggestion": _recommend_with_existing_mab(table, columns, recent_queries)}
+
+    if sql_lower == "select dbtune_mab_tune();":
+        print("Triger MAB tuning")
+        receiver.receive(sql_lower)
+        tune_mgr.immediate_tune()
+        inferred = _infer_from_recent_sql()
+        if inferred:
+            table, columns, inferred_queries = inferred
+            return {
+                "suggestion": _recommend_with_existing_mab(
+                    table, columns, inferred_queries
+                )
+            }
+
+    inferred = _infer_from_recent_sql()
+    if inferred:
+        table, columns, inferred_queries = inferred
+        return {
+            "suggestion": _recommend_with_existing_mab(
+                table, columns, inferred_queries
+            )
+        }
+
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            "Cannot infer tuning target. Use "
+            "dbtune_mab_tune('<table>', ARRAY['col1','col2']) to request recommendation."
+        ),
+    )
 
 
 @app.get("/mab/status/{task_id}")
